@@ -1,8 +1,9 @@
-import { el, menu, menuBelow, modal, prompt, confirmBox, toast, debounce, uid, ic, hydrateIcons } from './ui.js';
+import { el, menu, menuBelow, modal, prompt, confirmBox, toast, debounce, uid, ic, hydrateIcons, colorPicker, t } from './ui.js';
 import { TerminalView, NoteView, PortalView, termTheme } from './nodes.js';
 import { TEMPLATES, INSTALL_HINTS } from './templates.js';
 
 const api = window.regente;
+const I18N = window.RegenteI18n;
 const $ = (s) => document.querySelector(s);
 const viewport = $('#viewport');
 const pan = $('#pan');
@@ -32,7 +33,8 @@ const S = {
 };
 
 const SWATCHES = ['#1d1d1f', '#2f6df6', '#e5383b', '#26b36b', '#f0a020', '#a23fc9'];
-const WS_COLORS = ['#2f6df6', '#26b36b', '#a23fc9', '#f0a020', '#e5383b', '#0f8ea1', '#8b8b93'];
+// As 7 primeiras são as cores padrão por posição; o resto só aparece no seletor.
+const WS_COLORS = ['#2f6df6', '#26b36b', '#a23fc9', '#f0a020', '#e5383b', '#0f8ea1', '#8b8b93', '#9bc53d', '#f26b1d', '#e0457b', '#6c5ce7', '#8d6e63'];
 
 const saveWs = debounce(() => S.ws && api.saveWorkspace(S.ws), 250);
 const saveView = debounce(() => S.ws && api.saveWorkspace(S.ws), 600);
@@ -108,7 +110,7 @@ function renderTabs() {
   for (const g of settings().groups || []) if (!groups.includes(g)) groups.push(g);
   const row = (w, i) => {
     const st = wsStats(w);
-    const color = w.color || WS_COLORS[i % WS_COLORS.length];
+    const color = w.color || WS_COLORS[i % 7];
     return el('div', {
       class: 'ws-row' + (w.id === S.ws.id ? ' active' : '') + (w.parentId ? ' floor' : ''), title: w.cwd,
       onclick: () => w.id !== S.ws.id && showWorkspace(w.id),
@@ -131,7 +133,7 @@ function renderTabs() {
       class: 'group-head' + (collapsed.has(g) ? ' collapsed' : ''),
       onclick: () => { collapsed.has(g) ? collapsed.delete(g) : collapsed.add(g); settings().collapsedGroups = [...collapsed]; api.patchState({ settings: settings() }); renderTabs(); },
       oncontextmenu: (e) => { e.preventDefault(); groupMenu(g, e.clientX, e.clientY); },
-    }, ic('chevron-down'), g);
+    }, ic('chevron-down'), t(g));
     out.push(head);
     if (collapsed.has(g) && !q) continue;
     for (const w of visible) {
@@ -143,21 +145,21 @@ function renderTabs() {
 }
 function groupMenu(g, x, y) {
   menu(x, y, [
-    { label: 'Renomear grupo', action: async () => {
-      const name = await prompt('Renomear grupo', g);
+    { label: t('Renomear grupo'), action: async () => {
+      const name = await prompt(t('Renomear grupo'), t(g));
       if (!name) return;
       for (const w of S.state.workspaces) if ((w.group || 'Projetos') === g) { w.group = name; api.saveWorkspace(w); }
       settings().groups = (settings().groups || []).map((x) => (x === g ? name : x));
       api.patchState({ settings: settings() });
       renderTabs();
     } },
-    { label: 'Novo workspace aqui', action: () => newWorkspace(g) },
+    { label: t('Novo workspace aqui'), action: () => newWorkspace(g) },
   ]);
 }
 const renderTabsSoon = debounce(renderTabs, 150);
 
 async function renameWorkspace(w) {
-  const name = await prompt('Renomear workspace', w.name);
+  const name = await prompt(t('Renomear workspace'), w.name);
   if (!name) return;
   w.name = name;
   await api.renameWorkspace({ id: w.id, name });
@@ -167,36 +169,36 @@ async function renameWorkspace(w) {
 function workspaceMenu(w, x, y) {
   const persist = () => { if (w === S.ws) saveWs(); else api.saveWorkspace(w); renderTabs(); };
   menu(x, y, [
-    { label: 'Renomear', action: () => renameWorkspace(w) },
-    { label: 'Mover para grupo…', hint: w.group || 'Projetos', action: async () => {
-      const g = await prompt('Grupo (projeto)', w.group || 'Projetos');
+    { label: t('Renomear'), action: () => renameWorkspace(w) },
+    { label: t('Mover para grupo…'), hint: t(w.group || 'Projetos'), action: async () => {
+      const g = await prompt(t('Grupo (projeto)'), t(w.group || 'Projetos'));
       if (g) { w.group = g; persist(); }
     } },
-    { label: 'Trocar cor do ícone', action: () => { w.color = WS_COLORS[(WS_COLORS.indexOf(w.color) + 1) % WS_COLORS.length]; persist(); } },
-    { label: 'Pasta do projeto…', hint: w.cwd, action: async () => {
+    { label: t('Trocar cor do ícone'), action: () => colorPicker(x, y, WS_COLORS, w.color || WS_COLORS[S.state.workspaces.indexOf(w) % 7], (c) => { w.color = c; persist(); }) },
+    { label: t('Pasta do projeto…'), hint: w.cwd, action: async () => {
       const dir = await api.pickDir(w.cwd);
       if (dir) { w.cwd = dir; if (w === S.ws) saveWs(); else api.saveWorkspace(w); renderTabs(); }
     } },
-    { label: 'Criar andar a partir deste', action: () => createFloor(w) },
+    { label: t('Criar andar a partir deste'), action: () => createFloor(w) },
     'sep',
-    { label: 'Excluir workspace', action: async () => {
-      if (!(await confirmBox('Excluir workspace', `"${w.name}" e todos os seus terminais serão fechados.`))) return;
+    { label: t('Excluir workspace'), action: async () => {
+      if (!(await confirmBox(t('Excluir workspace'), t('"{name}" e todos os seus terminais serão fechados.', { name: w.name })))) return;
       for (const n of w.nodes) disposeFrame(n.id);
       if (await api.deleteWorkspace(w.id)) {
         S.state.workspaces = S.state.workspaces.filter((x) => x.id !== w.id);
         showWorkspace(S.state.workspaces[0].id);
-      } else toast('Não dá para excluir o último workspace', true);
+      } else toast(t('Não dá para excluir o último workspace'), true);
     } },
   ]);
 }
 
 async function newWorkspace(group) {
-  const name = await prompt('Nome do novo workspace', `Workspace ${S.state.workspaces.length + 1}`);
+  const name = await prompt(t('Nome do novo workspace'), `Workspace ${S.state.workspaces.length + 1}`);
   if (!name) return;
   const cwd = (await api.pickDir(S.ws.cwd)) || S.ws.cwd;
   const ws = await api.createWorkspace({ name, cwd });
   ws.group = typeof group === 'string' ? group : S.ws.group;
-  ws.color = WS_COLORS[S.state.workspaces.length % WS_COLORS.length];
+  ws.color = WS_COLORS[S.state.workspaces.length % 7];
   await api.saveWorkspace(ws);
   S.state.workspaces.push(ws);
   showWorkspace(ws.id);
@@ -211,16 +213,16 @@ function cycleWorkspace(dir) {
 // ---------- andares ----------
 
 async function createFloor(w = S.ws) {
-  const name = await prompt('Novo andar', 'experimento', {
-    hint: 'Um andar é uma cópia isolada do workspace. Em repositórios git vira um git worktree numa branch própria (regente/<nome>); fora do git, uma cópia da pasta. Os agentes do andar trabalham sem tocar no original.',
+  const name = await prompt(t('Novo andar'), t('experimento'), {
+    hint: t('Um andar é uma cópia isolada do workspace. Em repositórios git vira um git worktree numa branch própria (regente/<nome>); fora do git, uma cópia da pasta. Os agentes do andar trabalham sem tocar no original.'),
   });
   if (!name) return;
   try {
-    toast('Criando andar…');
+    toast(t('Criando andar…'));
     const ws = await api.floorCreate({ workspaceId: w.id, name });
     S.state.workspaces.push(ws);
     showWorkspace(ws.id);
-    toast(`Andar criado em ${ws.floor.dir}`);
+    toast(t('Andar criado em {dir}', { dir: ws.floor.dir }));
   } catch (e) { toast(e.message, true); }
 }
 
@@ -231,23 +233,23 @@ function renderFloorbar() {
   if (!f) return;
   const parent = S.state.workspaces.find((w) => w.id === S.ws.parentId);
   bar.replaceChildren(
-    ic('layers-2'), el('b', {}, 'Andar'),
-    f.kind === 'git' ? el('span', {}, 'branch ', el('code', {}, f.branch), ' a partir de ', el('code', {}, f.base)) : el('span', {}, 'cópia de ', el('code', {}, f.root)),
-    el('span', {}, 'em ', el('code', {}, f.dir)),
+    ic('layers-2'), el('b', {}, t('Andar')),
+    f.kind === 'git' ? el('span', {}, t('branch'), ' ', el('code', {}, f.branch), ' ', t('a partir de'), ' ', el('code', {}, f.base)) : el('span', {}, t('cópia de'), ' ', el('code', {}, f.root)),
+    el('span', {}, t('em'), ' ', el('code', {}, f.dir)),
     el('span', { class: 'spacer' }),
-    parent && el('button', { class: 'outline', onclick: () => showWorkspace(parent.id) }, 'Ir para o original'),
-    f.kind === 'git' && el('button', { class: 'primary', onclick: landFloor }, 'Pousar (merge)'),
-    el('button', { class: 'danger', onclick: discardFloor }, 'Descartar andar'),
+    parent && el('button', { class: 'outline', onclick: () => showWorkspace(parent.id) }, t('Ir para o original')),
+    f.kind === 'git' && el('button', { class: 'primary', onclick: landFloor }, t('Pousar (merge)')),
+    el('button', { class: 'danger', onclick: discardFloor }, t('Descartar andar')),
   );
 }
 
 async function landFloor() {
-  if (!(await confirmBox('Pousar andar', `Fazer merge da branch ${S.ws.floor.branch} em ${S.ws.floor.base} no repositório original?`))) return;
-  try { toast(await api.floorLand(S.ws.id) || 'Andar pousado'); } catch (e) { toast(e.message, true); }
+  if (!(await confirmBox(t('Pousar andar'), t('Fazer merge da branch {branch} em {base} no repositório original?', S.ws.floor)))) return;
+  try { toast(await api.floorLand(S.ws.id) || t('Andar pousado')); } catch (e) { toast(e.message, true); }
 }
 
 async function discardFloor() {
-  if (!(await confirmBox('Descartar andar', `O worktree/cópia em ${S.ws.floor.dir} será apagado, junto com a branch. Isso não pode ser desfeito.`))) return;
+  if (!(await confirmBox(t('Descartar andar'), t('O worktree/cópia em {dir} será apagado, junto com a branch. Isso não pode ser desfeito.', S.ws.floor)))) return;
   try {
     for (const n of S.ws.nodes) disposeFrame(n.id);
     const next = await api.floorDiscard(S.ws.id);
@@ -343,14 +345,14 @@ function frameFor(n) {
   const dot = el('span', { class: 'dot ' + (S.statuses[n.id] || (n.type === 'terminal' ? 'exited' : '')) });
   if (n.type !== 'terminal') dot.style.display = 'none';
   const kind = el('span', { class: 'kind' }, ic({ terminal: 'square-terminal', note: 'sticky-note', portal: 'globe' }[n.type]));
-  const title = el('span', { class: 'title', title: 'Duplo clique para renomear' }, n.title);
+  const title = el('span', { class: 'title', title: t('Duplo clique para renomear') }, n.title);
   const meta = el('span', { class: 'meta' });
   const head = el('div', { class: 'node-head' },
     kind, dot, title, meta, ...view.headerExtras(),
-    el('button', { title: 'Focar (Ctrl+Enter)', onclick: () => zoomToNode(f.node) }, ic('maximize-2')),
-    el('button', { title: 'Fechar', class: 'danger', onclick: () => removeNode(f.node) }, ic('x')));
+    el('button', { title: t('Focar (Ctrl+Enter)'), onclick: () => zoomToNode(f.node) }, ic('maximize-2')),
+    el('button', { title: t('Fechar'), class: 'danger', onclick: () => removeNode(f.node) }, ic('x')));
   const root = el('div', { class: `node ${n.type}`, 'data-id': n.id },
-    head, view.body, el('div', { class: 'handle', title: 'Arraste até outro nó para conectar' }), el('div', { class: 'resize' }));
+    head, view.body, el('div', { class: 'handle', title: t('Arraste até outro nó para conectar') }), el('div', { class: 'resize' }));
   title.addEventListener('dblclick', (e) => { e.stopPropagation(); editTitle(f, title); });
   root.addEventListener('pointerdown', () => select(f.node.id, false), true);
   head.addEventListener('dblclick', (e) => { if (e.target === head || e.target === meta) zoomToNode(f.node); });
@@ -374,7 +376,7 @@ function editTitle(f, title) {
     title.contentEditable = 'false';
     const t = title.textContent.trim();
     if (t && t !== f.node.title) {
-      if (S.ws.nodes.some((x) => x !== f.node && x.title.toLowerCase() === t.toLowerCase())) { toast('Já existe um nó com esse nome', true); title.textContent = f.node.title; return; }
+      if (S.ws.nodes.some((x) => x !== f.node && x.title.toLowerCase() === t.toLowerCase())) { toast(t('Já existe um nó com esse nome'), true); title.textContent = f.node.title; return; }
       f.node.title = t; saveWs(); refreshMeta(f.node.id);
     } else title.textContent = f.node.title;
   };
@@ -393,10 +395,10 @@ function refreshMeta(id) {
     const termTitle = S.titles[id];
     bits.push(termTitle || (n.cwd || S.ws.cwd || '').split('/').pop());
   } else if (n.type === 'portal') bits.push(f.view.title || n.url || '');
-  else bits.push('nota');
+  else bits.push(t('nota'));
   f.meta.replaceChildren(bits.filter(Boolean).join(' · '));
   if (n.statusText) f.meta.append(' · ', el('span', { class: 'status-text' }, n.statusText));
-  if (S.queues[id]) f.meta.append(' ', el('span', { class: 'queue-badge', title: 'mensagens na fila' }, S.queues[id]));
+  if (S.queues[id]) f.meta.append(' ', el('span', { class: 'queue-badge', title: t('mensagens na fila') }, S.queues[id]));
   f.meta.title = f.meta.textContent;
 }
 
@@ -430,11 +432,13 @@ function addNode(partial) {
   // Evita empilhar exatamente em cima de outro nó.
   while (S.ws.nodes.some((o) => Math.abs(o.x - n.x) < 30 && Math.abs(o.y - n.y) < 30)) { n.x += 40; n.y += 40; }
   S.ws.nodes.push(n);
+  // Salva já (sem debounce): o term:start do attach procura o nó no estado do processo principal.
+  // As chamadas IPC são atendidas em ordem, então o save chega antes.
+  api.saveWorkspace(S.ws);
   const f = frameFor(n);
   nodesLayer.append(f.el);
   f.view.attach();
   select(n.id, true);
-  saveWs();
   updateEmpty();
   return n;
 }
@@ -446,21 +450,21 @@ function addTerminal(agentId, roleId) {
 
 function terminalMenu(x, y) {
   const items = S.state.agents.map((a) => ({ label: a.label, hint: a.launch.split(' ')[0] || '$SHELL', action: () => addTerminal(a.id) }));
-  items.push('sep', { label: 'Com papel…', action: () => pickRoleThenAdd(x, y) });
+  items.push('sep', { label: t('Com papel…'), action: () => pickRoleThenAdd(x, y) });
   menu(x, y, items);
 }
 
 function pickRoleThenAdd(x, y) {
   menu(x, y, S.state.roles.map((r) => ({
-    label: r.name,
+    label: t(r.name),
     action: () => menu(x, y, S.state.agents.filter((a) => a.id !== 'shell').map((a) => ({ label: a.label, action: () => addTerminal(a.id, r.id) }))),
   })));
 }
 
-function addNote() { return addNode({ type: 'note', title: uniqueTitle('Nota'), w: 380, h: 300 }); }
+function addNote() { return addNode({ type: 'note', title: uniqueTitle(t('Nota')), w: 380, h: 300 }); }
 
 async function addPortal() {
-  const url = await prompt('Endereço do portal', 'http://localhost:3000', { hint: 'Agentes conectados podem navegar, ler a árvore de elementos, clicar e digitar: regente portal <nome> snapshot | click <ref> | type <ref> <texto>' });
+  const url = await prompt(t('Endereço do portal'), 'http://localhost:3000', { hint: t('Agentes conectados podem navegar, ler a árvore de elementos, clicar e digitar: regente portal <nome> snapshot | click <ref> | type <ref> <texto>') });
   if (!url) return;
   const n = addNode({ type: 'portal', title: uniqueTitle('Portal'), w: 960, h: 640, url: /^[a-z]+:/i.test(url) ? url : 'http://' + url });
   return n;
@@ -468,7 +472,7 @@ async function addPortal() {
 
 async function removeNode(n) {
   if (n.type === 'terminal' && ['working', 'waiting'].includes(S.statuses[n.id])) {
-    if (!(await confirmBox('Fechar terminal', `"${n.title}" ainda está trabalhando. Fechar mesmo assim?`))) return;
+    if (!(await confirmBox(t('Fechar terminal'), t('"{name}" ainda está trabalhando. Fechar mesmo assim?', { name: n.title })))) return;
   }
   disposeFrame(n.id);
   S.ws.nodes = S.ws.nodes.filter((x) => x.id !== n.id);
@@ -525,7 +529,7 @@ function renderEdges() {
     const hit = svg('path', { d, class: 'hit' });
     const ends = [p, q].map((pt) => svg('circle', { cx: pt.x, cy: pt.y, r: 4.5, class: 'end' }));
     hit.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); S.selectedEdge = e.id; S.selected = null; for (const f of S.frames.values()) f.el.classList.remove('selected'); renderEdges(); });
-    hit.addEventListener('contextmenu', (ev) => { ev.preventDefault(); menu(ev.clientX, ev.clientY, [{ label: 'Remover conexão', action: () => removeEdge(e.id) }]); });
+    hit.addEventListener('contextmenu', (ev) => { ev.preventDefault(); menu(ev.clientX, ev.clientY, [{ label: t('Remover conexão'), action: () => removeEdge(e.id) }]); });
     g.append(line, ...ends, hit);
     return g;
   }));
@@ -544,7 +548,7 @@ function connect(from, to) {
   renderEdges();
   saveWs();
   const a = S.ws.nodes.find((n) => n.id === from), b = S.ws.nodes.find((n) => n.id === to);
-  toast(`${a.title} ⇄ ${b.title} conectados`);
+  toast(t('{a} ⇄ {b} conectados', { a: a.title, b: b.title }));
 }
 
 // Bolinha percorrendo a conexão quando uma mensagem passa entre agentes.
@@ -580,6 +584,10 @@ function renderDrawings() {
   drawSvg.replaceChildren(defs, ...S.ws.drawings.map(drawingEl));
 }
 
+// Tinta "preta" padrão acompanha o tema; senão some no canvas escuro.
+const INK = '#1d1d1f';
+const ink = (c) => (c === INK ? 'var(--text)' : c);
+
 function drawingEl(d) {
   let e;
   const common = { stroke: d.color, 'stroke-width': d.width || 3, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'data-id': d.id };
@@ -592,9 +600,10 @@ function drawingEl(d) {
     e = svg('rect', { ...common, x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1), rx: 8 });
   } else if (d.kind === 'text') {
     const [[x, y]] = d.points;
-    e = svg('text', { x, y, fill: d.color, 'font-size': d.size || 28, 'data-id': d.id });
+    e = svg('text', { x, y, 'font-size': d.size || 28, 'data-id': d.id });
     e.textContent = d.text;
   }
+  e.style[d.kind === 'text' ? 'fill' : 'stroke'] = ink(d.color);
   e.addEventListener('pointerdown', (ev) => {
     if (S.tool !== 'erase') return;
     ev.stopPropagation();
@@ -617,7 +626,7 @@ overlay.addEventListener('pointerdown', async (e) => {
   const p0 = toWorld(e.clientX, e.clientY);
   const pt = (p) => [Math.round(p.x), Math.round(p.y)];
   if (S.tool === 'text') {
-    const text = await prompt('Texto no canvas', '');
+    const text = await prompt(t('Texto no canvas'), '');
     if (text) { S.ws.drawings.push({ id: uid('d-'), kind: 'text', points: [pt(p0)], text, color, size: 14 + S.stroke * 8 }); renderDrawings(); saveWs(); updateEmpty(); }
     setTool('select');
     return;
@@ -752,8 +761,8 @@ viewport.addEventListener('dblclick', (e) => {
   menu(e.clientX, e.clientY, [
     ...S.state.agents.map((a) => ({ label: `▣ ${a.label}`, action: () => { const n = addTerminal(a.id); moveTo(n, p); } })),
     'sep',
-    { label: '✎ Nota', action: () => moveTo(addNote(), p) },
-    { label: '◎ Portal', action: async () => { const n = await addPortal(); if (n) moveTo(n, p); } },
+    { label: '✎ ' + t('Nota'), action: () => moveTo(addNote(), p) },
+    { label: '◎ ' + t('Portal'), action: async () => { const n = await addPortal(); if (n) moveTo(n, p); } },
   ]);
 });
 
@@ -848,12 +857,12 @@ function nodeTitle(id) {
 function renderLog() {
   const list = $('#log-list');
   if ($('#log').hidden) return;
-  const kinds = { send: 'msg', ask: 'tarefa', reply: 'resposta' };
+  const kinds = { send: t('msg'), ask: t('tarefa'), reply: t('resposta') };
   list.replaceChildren(...S.log.slice(-200).reverse().map((m) => el('div', { class: 'msg' },
     el('div', { class: 'who' }, el('b', {}, nodeTitle(m.from)), ' → ', el('b', {}, nodeTitle(m.to)), el('span', { class: 'kind ' + m.kind }, kinds[m.kind] || m.kind),
       ' ', new Date(m.at).toLocaleTimeString()),
     el('pre', {}, m.text))));
-  if (!S.log.length) list.append(el('div', { class: 'hint' }, 'Nenhuma mensagem ainda. Conecte dois agentes e peça para um delegar ao outro com "regente ask".'));
+  if (!S.log.length) list.append(el('div', { class: 'hint' }, t('Nenhuma mensagem ainda. Conecte dois agentes e peça para um delegar ao outro com "regente ask".')));
 }
 
 // ---------- modais: papéis, partituras, configurações ----------
@@ -864,25 +873,25 @@ function rolesModal() {
     const list = el('div', { class: 'list' });
     const render = () => list.replaceChildren(...roles.map((r, i) => el('div', { class: 'card' },
       el('div', { class: 'row' },
-        el('input', { type: 'text', value: r.name, oninput: (e) => { r.name = e.target.value; } }),
-        el('button', { class: 'danger', onclick: () => { roles.splice(i, 1); render(); } }, 'Excluir')),
-      el('textarea', { value: r.prompt, oninput: (e) => { r.prompt = e.target.value; } }))));
+        el('input', { type: 'text', value: t(r.name), oninput: (e) => { r.name = e.target.value; } }),
+        el('button', { class: 'danger', onclick: () => { roles.splice(i, 1); render(); } }, t('Excluir'))),
+      el('textarea', { value: t(r.prompt), oninput: (e) => { r.prompt = e.target.value; } }))));
     render();
     return [
-      el('h3', {}, 'Papéis'),
-      el('div', { class: 'hint' }, 'Instruções reutilizáveis que definem a responsabilidade de um agente. Entram no system prompt ao iniciar (Claude Code) ou como primeira mensagem (outros CLIs).'),
+      el('h3', {}, t('Papéis')),
+      el('div', { class: 'hint' }, t('Instruções reutilizáveis que definem a responsabilidade de um agente. Entram no system prompt ao iniciar (Claude Code) ou como primeira mensagem (outros CLIs).')),
       list,
       el('div', { class: 'actions' },
-        el('button', { onclick: () => { roles.push({ id: uid('r-'), name: 'Novo papel', prompt: '' }); render(); } }, '＋ Papel'),
+        el('button', { onclick: () => { roles.push({ id: uid('r-'), name: t('Novo papel'), prompt: '' }); render(); } }, '＋ ' + t('Papel')),
         el('span', { class: 'spacer', style: { flex: 1 } }),
-        el('button', { onclick: close }, 'Cancelar'),
-        el('button', { class: 'primary', onclick: () => { S.state.roles = roles; api.patchState({ roles }); close(); toast('Papéis salvos'); } }, 'Salvar')),
+        el('button', { onclick: close }, t('Cancelar')),
+        el('button', { class: 'primary', onclick: () => { S.state.roles = roles; api.patchState({ roles }); close(); toast(t('Papéis salvos')); } }, t('Salvar'))),
     ];
   });
 }
 
 async function saveScore(close) {
-  const name = await prompt('Nome da partitura', S.ws.name);
+  const name = await prompt(t('Nome da partitura'), S.ws.name);
   if (!name) return;
   const notes = {};
   for (const n of S.ws.nodes) if (n.type === 'note') notes[n.id] = await api.noteRead(n.id);
@@ -896,13 +905,14 @@ async function saveScore(close) {
   });
   S.state.scores.push({ id: uid('s-'), name, nodes, edges: structuredClone(S.ws.edges), drawings: structuredClone(S.ws.drawings), notes, at: Date.now() });
   api.patchState({ scores: S.state.scores });
-  toast(`Partitura "${name}" salva`);
+  toast(t('Partitura "{name}" salva', { name }));
   close();
   scoresModal();
 }
 
 async function applyScore(score, quiet) {
   const map = new Map();
+  const builtin = TEMPLATES.includes(score);
   const xs = S.ws.nodes.map((n) => n.x + n.w);
   const minX = Math.min(...score.nodes.map((n) => n.x), ...score.drawings.flatMap((d) => d.points.map((p) => p[0])));
   const minY = Math.min(...score.nodes.map((n) => n.y));
@@ -914,24 +924,25 @@ async function applyScore(score, quiet) {
     map.set(sn.id, n.id);
     n.x += offX; n.y += offY;
     if (n.agent === '$default') n.agent = settings().defaultAgent || 'claude';
+    if (builtin) n.title = t(n.title);
     if (S.ws.nodes.some((o) => o.title.toLowerCase() === n.title.toLowerCase())) n.title = uniqueTitle(n.title);
     if (n.cwd?.startsWith('.')) n.cwd = S.ws.cwd + n.cwd.slice(1);
-    if (n.type === 'note') await api.noteWrite(n.id, score.notes?.[sn.id] || '');
+    if (n.type === 'note') await api.noteWrite(n.id, builtin ? t(score.notes?.[sn.id] || '') : score.notes?.[sn.id] || '');
     S.ws.nodes.push(n);
   }
   for (const e of score.edges) if (map.has(e.from) && map.has(e.to)) S.ws.edges.push({ id: uid('e-'), from: map.get(e.from), to: map.get(e.to) });
-  for (const d of score.drawings) S.ws.drawings.push({ ...structuredClone(d), id: uid('d-'), points: d.points.map(([x, y]) => [x + offX, y + offY]) });
+  for (const d of score.drawings) S.ws.drawings.push({ ...structuredClone(d), id: uid('d-'), points: d.points.map(([x, y]) => [x + offX, y + offY]), ...(builtin && d.text ? { text: t(d.text) } : {}) });
   await api.saveWorkspace(S.ws);
   showWorkspace(S.ws.id);
   fitAll();
-  if (!quiet) toast(`"${score.name}" aplicada`);
+  if (!quiet) toast(t('"{name}" aplicada', { name: builtin ? t(score.name) : score.name }));
 }
 
-function templateCard(t, onPick, selected) {
-  return el('div', { class: 'choice' + (selected ? ' on' : ''), onclick: () => onPick(t) },
-    el('div', { class: 'choice-head' }, ic(t.icon), el('b', {}, t.name)),
-    el('div', { class: 'hint' }, t.description),
-    t.nodes.length ? el('div', { class: 'tiny' }, `${t.nodes.filter((n) => n.type === 'terminal').length} agentes · ${t.nodes.filter((n) => n.type !== 'terminal').length} notas/portais`) : null);
+function templateCard(tpl, onPick, selected) {
+  return el('div', { class: 'choice' + (selected ? ' on' : ''), onclick: () => onPick(tpl) },
+    el('div', { class: 'choice-head' }, ic(tpl.icon), el('b', {}, t(tpl.name))),
+    el('div', { class: 'hint' }, t(tpl.description)),
+    tpl.nodes.length ? el('div', { class: 'tiny' }, t('{a} agentes · {b} notas/portais', { a: tpl.nodes.filter((n) => n.type === 'terminal').length, b: tpl.nodes.filter((n) => n.type !== 'terminal').length })) : null);
 }
 
 // ---------- assistente de configuração inicial ----------
@@ -941,7 +952,7 @@ const EMPTY_TEMPLATE = { id: 't-empty', name: 'Canvas vazio', icon: 'square', de
 async function onboarding() {
   const st = settings();
   const draft = {
-    theme: st.theme || 'light', defaultAgent: st.defaultAgent || 'claude', agents: structuredClone(S.state.agents),
+    theme: st.theme || 'light', language: st.language || 'auto', defaultAgent: st.defaultAgent || 'claude', agents: structuredClone(S.state.agents),
     cwd: S.ws.cwd, wsName: S.ws.name, template: S.ws.nodes.length ? EMPTY_TEMPLATE : TEMPLATES[1], skill: true,
   };
   let step = 0;
@@ -951,32 +962,38 @@ async function onboarding() {
     if (!d[draft.defaultAgent]) draft.defaultAgent = ['claude', 'codex', 'gemini', 'opencode'].find((id) => d[id]) || draft.defaultAgent;
     render();
   });
-  const STEPS = ['Boas-vindas', 'Tema', 'Agentes', 'Projeto', 'Arranjo', 'Pronto'];
+  const STEPS = ['Boas-vindas', 'Idioma', 'Tema', 'Agentes', 'Projeto', 'Arranjo', 'Pronto'];
   let box, close;
   const go = (d) => { step = Math.max(0, Math.min(STEPS.length - 1, step + d)); render(); };
 
   const body = () => {
     switch (step) {
       case 0: return [
-        el('div', { class: 'hero' }, ic('music-4', 'big'), el('h2', {}, 'Bem-vindo ao Regente')),
-        el('p', { class: 'lead' }, 'Um canvas onde seus agentes de IA trabalham lado a lado. Ligue dois agentes com uma linha e eles passam a conversar, delegar tarefas, anotar o progresso e testar no navegador.'),
+        el('div', { class: 'hero' }, ic('music-4', 'big'), el('h2', {}, t('Bem-vindo ao Regente'))),
+        el('p', { class: 'lead' }, t('Um canvas onde seus agentes de IA trabalham lado a lado. Ligue dois agentes com uma linha e eles passam a conversar, delegar tarefas, anotar o progresso e testar no navegador.')),
         el('div', { class: 'bullets' },
-          el('div', {}, ic('square-terminal'), el('span', {}, el('b', {}, 'Agentes'), ' em terminais reais: Claude Code, Codex, Gemini, OpenCode ou shell')),
-          el('div', {}, ic('move-up-right'), el('span', {}, el('b', {}, 'Conexões'), ' definem quem conversa com quem')),
-          el('div', {}, ic('sticky-note'), el('span', {}, el('b', {}, 'Notas e portais'), ' que os agentes leem, escrevem e controlam')),
-          el('div', {}, ic('layers-2'), el('span', {}, el('b', {}, 'Andares'), ' para experimentar numa branch isolada'))),
-        el('p', { class: 'hint' }, 'Vamos configurar em 1 minuto. Tudo pode ser mudado depois em Configurações.'),
+          el('div', {}, ic('square-terminal'), el('span', {}, el('b', {}, t('Agentes')), ' ', t('em terminais reais: Claude Code, Codex, Gemini, OpenCode ou shell'))),
+          el('div', {}, ic('move-up-right'), el('span', {}, el('b', {}, t('Conexões')), ' ', t('definem quem conversa com quem'))),
+          el('div', {}, ic('sticky-note'), el('span', {}, el('b', {}, t('Notas e portais')), ' ', t('que os agentes leem, escrevem e controlam'))),
+          el('div', {}, ic('layers-2'), el('span', {}, el('b', {}, t('Andares')), ' ', t('para experimentar numa branch isolada')))),
+        el('p', { class: 'hint' }, t('Vamos configurar em 1 minuto. Tudo pode ser mudado depois em Configurações.')),
       ];
       case 1: return [
-        el('h2', {}, 'Escolha o tema'),
-        el('div', { class: 'choices three' }, [['light', 'Claro', 'sun'], ['dark', 'Escuro', 'moon'], ['system', 'Seguir o sistema', 'app-window']].map(([v, label, icon]) =>
+        el('h2', {}, t('Escolha o idioma')),
+        el('div', { class: 'choices three' }, I18N.LANGS.map(([code, label]) =>
+          el('div', { class: 'choice' + (I18N.lang === code ? ' on' : ''), onclick: () => { draft.language = code; setLanguage(code); refreshStatic(); renderTabs(); render(); } },
+            el('div', { class: 'choice-head' }, ic('languages'), el('b', {}, label))))),
+      ];
+      case 2: return [
+        el('h2', {}, t('Escolha o tema')),
+        el('div', { class: 'choices three' }, [['light', t('Claro'), 'sun'], ['dark', t('Escuro'), 'moon'], ['system', t('Seguir o sistema'), 'app-window']].map(([v, label, icon]) =>
           el('div', { class: 'choice theme-' + v + (draft.theme === v ? ' on' : ''), onclick: () => { draft.theme = v; applyTheme(v); render(); } },
             el('div', { class: 'swatch-preview' }, el('span'), el('span'), el('span')),
             el('div', { class: 'choice-head' }, ic(icon), el('b', {}, label))))),
       ];
-      case 2: return [
-        el('h2', {}, 'Seus agentes'),
-        el('p', { class: 'hint' }, 'Detectei os CLIs instalados. Escolha o agente padrão dos modelos e ajuste o comando de inicialização, se quiser.'),
+      case 3: return [
+        el('h2', {}, t('Seus agentes')),
+        el('p', { class: 'hint' }, t('Detectei os CLIs instalados. Escolha o agente padrão dos modelos e ajuste o comando de inicialização, se quiser.')),
         el('div', { class: 'agents' }, draft.agents.map((a) => {
           const found = detected?.[a.id];
           // O card inteiro seleciona o agente; só o campo do comando fica de fora.
@@ -985,42 +1002,42 @@ async function onboarding() {
             el('input', { type: 'radio', name: 'def', checked: draft.defaultAgent === a.id, disabled: a.id === 'shell' }),
             el('div', { class: 'agent-info' },
               el('div', {}, el('b', {}, a.label), ' ',
-                detected == null ? el('span', { class: 'tag' }, 'verificando…')
-                  : found ? el('span', { class: 'tag ok' }, ic('check', 'sm'), ' instalado') : el('span', { class: 'tag no' }, 'não encontrado')),
-              found ? el('small', {}, found) : INSTALL_HINTS[a.id] && detected ? el('small', {}, 'Para instalar: ', el('code', {}, INSTALL_HINTS[a.id])) : null),
-            a.id !== 'shell' && el('input', { type: 'text', value: a.launch, title: 'Comando de inicialização', oninput: (e) => { a.launch = e.target.value; } }));
+                detected == null ? el('span', { class: 'tag' }, t('verificando…'))
+                  : found ? el('span', { class: 'tag ok' }, ic('check', 'sm'), ' ', t('instalado')) : el('span', { class: 'tag no' }, t('não encontrado'))),
+              found ? el('small', {}, found) : INSTALL_HINTS[a.id] && detected ? el('small', {}, t('Para instalar:'), ' ', el('code', {}, INSTALL_HINTS[a.id])) : null),
+            a.id !== 'shell' && el('input', { type: 'text', value: a.launch, title: t('Comando de inicialização'), oninput: (e) => { a.launch = e.target.value; } }));
         })),
       ];
-      case 3: return [
-        el('h2', {}, 'Seu primeiro projeto'),
-        el('p', { class: 'hint' }, 'Os agentes deste workspace abrem nesta pasta. Se for um repositório git, você poderá criar andares (branches isoladas).'),
-        el('label', {}, 'Nome do workspace'),
-        el('input', { type: 'text', value: draft.wsName, oninput: (e) => { draft.wsName = e.target.value; }, onkeydown: (e) => e.stopPropagation() }),
-        el('label', {}, 'Pasta do projeto'),
-        el('div', { class: 'row' }, el('input', { type: 'text', value: draft.cwd, oninput: (e) => { draft.cwd = e.target.value; }, onkeydown: (e) => e.stopPropagation() }),
-          el('button', { class: 'outline', onclick: async () => { const d = await api.pickDir(draft.cwd); if (d) { draft.cwd = d; render(); } } }, ic('folder'), 'Escolher…')),
-      ];
       case 4: return [
-        el('h2', {}, 'Comece com um arranjo'),
-        el('p', { class: 'hint' }, `Modelos prontos usando ${draft.agents.find((a) => a.id === draft.defaultAgent)?.label || draft.defaultAgent}. Ficam também em Partituras → Modelos.`),
-        el('div', { class: 'choices' }, [...TEMPLATES, EMPTY_TEMPLATE].map((t) => templateCard(t, (x) => { draft.template = x; render(); }, draft.template.id === t.id))),
+        el('h2', {}, t('Seu primeiro projeto')),
+        el('p', { class: 'hint' }, t('Os agentes deste workspace abrem nesta pasta. Se for um repositório git, você poderá criar andares (branches isoladas).')),
+        el('label', {}, t('Nome do workspace')),
+        el('input', { type: 'text', value: draft.wsName, oninput: (e) => { draft.wsName = e.target.value; }, onkeydown: (e) => e.stopPropagation() }),
+        el('label', {}, t('Pasta do projeto')),
+        el('div', { class: 'row' }, el('input', { type: 'text', value: draft.cwd, oninput: (e) => { draft.cwd = e.target.value; }, onkeydown: (e) => e.stopPropagation() }),
+          el('button', { class: 'outline', onclick: async () => { const d = await api.pickDir(draft.cwd); if (d) { draft.cwd = d; render(); } } }, ic('folder'), t('Escolher…'))),
+      ];
+      case 5: return [
+        el('h2', {}, t('Comece com um arranjo')),
+        el('p', { class: 'hint' }, t('Modelos prontos usando {agent}. Ficam também em Partituras → Modelos.', { agent: draft.agents.find((a) => a.id === draft.defaultAgent)?.label || draft.defaultAgent })),
+        el('div', { class: 'choices' }, [...TEMPLATES, EMPTY_TEMPLATE].map((tpl) => templateCard(tpl, (x) => { draft.template = x; render(); }, draft.template.id === tpl.id))),
       ];
       default: return [
-        el('div', { class: 'hero' }, ic('rocket', 'big'), el('h2', {}, 'Tudo pronto')),
+        el('div', { class: 'hero' }, ic('rocket', 'big'), el('h2', {}, t('Tudo pronto'))),
         el('div', { class: 'bullets' },
-          el('div', {}, ic('move-up-right'), el('span', {}, 'Arraste o ', el('b', {}, '●'), ' da borda de um nó até outro para conectá-los')),
-          el('div', {}, ic('pencil'), el('span', {}, el('b', {}, 'Ctrl+I'), ' num terminal abre o compositor com @menções e imagens')),
-          el('div', {}, ic('command'), el('span', {}, el('b', {}, 'Ctrl+P'), ' busca tudo; ', el('b', {}, 'Ctrl+0'), ' mostra tudo; ', el('b', {}, 'Alt+setas'), ' pula entre agentes')),
-          el('div', {}, ic('message-square-more'), el('span', {}, 'Peça a um agente: ', el('i', {}, '"use regente ask para pedir ao Revisor que revise suas mudanças"')))),
+          el('div', {}, ic('move-up-right'), el('span', {}, t('Arraste o'), ' ', el('b', {}, '●'), ' ', t('da borda de um nó até outro para conectá-los'))),
+          el('div', {}, ic('pencil'), el('span', {}, el('b', {}, 'Ctrl+I'), ' ', t('num terminal abre o compositor com @menções e imagens'))),
+          el('div', {}, ic('command'), el('span', {}, el('b', {}, 'Ctrl+P'), ' ', t('busca tudo;'), ' ', el('b', {}, 'Ctrl+0'), ' ', t('mostra tudo;'), ' ', el('b', {}, t('Alt+setas')), ' ', t('pula entre agentes'))),
+          el('div', {}, ic('message-square-more'), el('span', {}, t('Peça a um agente:'), ' ', el('i', {}, t('"use regente ask para pedir ao Revisor que revise suas mudanças"'))))),
         el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: draft.skill, onchange: (e) => { draft.skill = e.target.checked; } }),
-          ' Instalar a skill "regente" em ~/.claude/skills e ~/.agents/skills (ensina qualquer sessão de agente a usar o canvas)'),
+          ' ', t('Instalar a skill "regente" em ~/.claude/skills e ~/.agents/skills (ensina qualquer sessão de agente a usar o canvas)')),
       ];
     }
   };
 
   const finish = async () => {
     S.state.agents = draft.agents;
-    Object.assign(st, { theme: draft.theme, defaultAgent: draft.defaultAgent, onboarded: true });
+    Object.assign(st, { theme: draft.theme, language: draft.language, defaultAgent: draft.defaultAgent, onboarded: true });
     await api.patchState({ agents: draft.agents, settings: st });
     if (draft.wsName.trim()) { S.ws.name = draft.wsName.trim(); }
     S.ws.cwd = draft.cwd;
@@ -1029,18 +1046,18 @@ async function onboarding() {
     close();
     if (draft.template.nodes.length) await applyScore(draft.template, true);
     renderTabs();
-    toast('Bem-vindo ao Regente!');
+    toast(t('Bem-vindo ao Regente!'));
   };
 
   const render = () => {
     if (!box) return;
     box.replaceChildren(
-      el('div', { class: 'steps' }, STEPS.map((label, i) => el('span', { class: i === step ? 'on' : i < step ? 'done' : '' }, label))),
+      el('div', { class: 'steps' }, STEPS.map((label, i) => el('span', { class: i === step ? 'on' : i < step ? 'done' : '' }, t(label)))),
       el('div', { class: 'wizard-body' }, ...body().filter(Boolean)),
       el('div', { class: 'actions' },
-        step === 0 ? el('button', { class: 'ghost', onclick: () => { st.onboarded = true; api.patchState({ settings: st }); close(); } }, 'Pular') : el('button', { onclick: () => go(-1) }, 'Voltar'),
+        step === 0 ? el('button', { class: 'ghost', onclick: () => { st.onboarded = true; api.patchState({ settings: st }); close(); } }, t('Pular')) : el('button', { onclick: () => go(-1) }, t('Voltar')),
         el('span', { class: 'spacer' }),
-        step < STEPS.length - 1 ? el('button', { class: 'primary', onclick: () => go(1) }, step === 0 ? 'Começar' : 'Continuar') : el('button', { class: 'primary', onclick: finish }, 'Abrir o canvas')),
+        step < STEPS.length - 1 ? el('button', { class: 'primary', onclick: () => go(1) }, step === 0 ? t('Começar') : t('Continuar')) : el('button', { class: 'primary', onclick: finish }, t('Abrir o canvas'))),
     );
   };
   close = modal(() => { box = el('div', { class: 'wizard' }); return box; });
@@ -1050,18 +1067,18 @@ async function onboarding() {
 
 function scoresModal() {
   modal((close) => [
-    el('h3', {}, 'Partituras'),
-    el('div', { class: 'hint' }, 'Salve o arranjo inteiro (agentes com papéis, notas, portais, desenhos e conexões) e restaure em qualquer workspace ou andar.'),
+    el('h3', {}, t('Partituras')),
+    el('div', { class: 'hint' }, t('Salve o arranjo inteiro (agentes com papéis, notas, portais, desenhos e conexões) e restaure em qualquer workspace ou andar.')),
     el('div', { class: 'list' }, S.state.scores.length ? S.state.scores.map((s) => el('div', { class: 'card' },
       el('div', { class: 'row' },
         el('b', { style: { flex: 1 } }, s.name),
-        el('span', { class: 'hint' }, `${s.nodes.length} nós · ${s.edges.length} conexões`),
-        el('button', { class: 'primary', onclick: () => { close(); applyScore(s); } }, 'Aplicar aqui'),
-        el('button', { class: 'danger', onclick: () => { S.state.scores = S.state.scores.filter((x) => x !== s); api.patchState({ scores: S.state.scores }); close(); scoresModal(); } }, 'Excluir')),
-    )) : el('div', { class: 'hint' }, 'Nenhuma partitura salva ainda.')),
-    el('h3', { style: { marginTop: '10px' } }, 'Modelos'),
-    el('div', { class: 'choices' }, TEMPLATES.map((t) => templateCard(t, () => { close(); applyScore(t); }))),
-    el('div', { class: 'actions' }, el('button', { onclick: close }, 'Fechar'), el('button', { class: 'primary', onclick: () => saveScore(close) }, 'Salvar arranjo atual')),
+        el('span', { class: 'hint' }, t('{n} nós · {e} conexões', { n: s.nodes.length, e: s.edges.length })),
+        el('button', { class: 'primary', onclick: () => { close(); applyScore(s); } }, t('Aplicar aqui')),
+        el('button', { class: 'danger', onclick: () => { S.state.scores = S.state.scores.filter((x) => x !== s); api.patchState({ scores: S.state.scores }); close(); scoresModal(); } }, t('Excluir'))),
+    )) : el('div', { class: 'hint' }, t('Nenhuma partitura salva ainda.'))),
+    el('h3', { style: { marginTop: '10px' } }, t('Modelos')),
+    el('div', { class: 'choices' }, TEMPLATES.map((tpl) => templateCard(tpl, () => { close(); applyScore(tpl); }))),
+    el('div', { class: 'actions' }, el('button', { onclick: close }, t('Fechar')), el('button', { class: 'primary', onclick: () => saveScore(close) }, t('Salvar arranjo atual'))),
   ]);
   document.querySelector('.modal:last-child')?.classList.add('wide');
 }
@@ -1073,62 +1090,68 @@ function settingsModal() {
     const list = el('div', { class: 'list' });
     const render = () => list.replaceChildren(...agents.map((a, i) => el('div', { class: 'card' },
       el('div', { class: 'row' },
-        el('input', { type: 'text', value: a.label, title: 'Nome', oninput: (e) => { a.label = e.target.value; } }),
+        el('input', { type: 'text', value: a.label, title: t('Nome'), oninput: (e) => { a.label = e.target.value; } }),
         el('code', {}, a.id),
-        !['claude', 'codex', 'gemini', 'opencode', 'shell'].includes(a.id) && el('button', { class: 'danger', onclick: () => { agents.splice(i, 1); render(); } }, 'Excluir')),
-      el('input', { type: 'text', value: a.launch, placeholder: 'comando (vazio = só o shell)', oninput: (e) => { a.launch = e.target.value; } }))));
+        !['claude', 'codex', 'gemini', 'opencode', 'shell'].includes(a.id) && el('button', { class: 'danger', onclick: () => { agents.splice(i, 1); render(); } }, t('Excluir'))),
+      el('input', { type: 'text', value: a.launch, placeholder: t('comando (vazio = só o shell)'), oninput: (e) => { a.launch = e.target.value; } }))));
     render();
     return [
-      el('h3', {}, 'Configurações'),
-      el('label', {}, 'Agentes — comando de inicialização. $REGENTE_SYSTEM_PROMPT contém o papel + instruções de orquestração.'),
+      el('h3', {}, t('Configurações')),
+      el('div', { class: 'row' }, el('label', {}, t('Idioma')), el('select', { onchange: (e) => { st.language = e.target.value; } },
+        [['auto', t('Automático (sistema)')], ...I18N.LANGS].map(([v, l]) => el('option', { value: v, selected: (st.language || 'auto') === v }, l)))),
+      el('label', {}, t('Agentes — comando de inicialização. $REGENTE_SYSTEM_PROMPT contém o papel + instruções de orquestração.')),
       list,
       el('div', { class: 'row' }, el('button', { onclick: async () => {
-        const id = await prompt('Id do novo agente (ex.: aider)');
+        const id = await prompt(t('Id do novo agente (ex.: aider)'));
         if (id) { agents.push({ id: id.toLowerCase().replace(/\W+/g, '-'), label: id, launch: id }); render(); }
-      } }, '＋ Agente personalizado')),
-      el('div', { class: 'row' }, el('label', {}, 'Fonte do terminal'),
+      } }, '＋ ' + t('Agente personalizado'))),
+      el('div', { class: 'row' }, el('label', {}, t('Fonte do terminal')),
         el('input', { type: 'text', value: st.fontSize || 13, style: { width: '60px', flex: 'none' }, oninput: (e) => { st.fontSize = +e.target.value || 13; } })),
-      el('div', { class: 'row' }, el('label', {}, el('input', { type: 'checkbox', checked: st.notifications !== false, onchange: (e) => { st.notifications = e.target.checked; } }), ' Notificar quando um agente terminar ou pedir permissão (com a janela sem foco)')),
-      el('div', { class: 'row' }, el('label', {}, 'Tema'), el('select', { onchange: (e) => { st.theme = e.target.value; } },
-        [['light', 'Claro'], ['dark', 'Escuro'], ['system', 'Sistema']].map(([v, l]) => el('option', { value: v, selected: (st.theme || 'light') === v }, l)))),
-      el('div', { class: 'row' }, el('button', { class: 'outline', onclick: () => { close(); onboarding(); } }, ic('wand-sparkles'), 'Abrir o assistente de configuração')),
-      (st.trustedHosts || []).length ? el('div', { class: 'row' }, el('label', {}, 'Sites confiáveis (certificado):'),
-        ...(st.trustedHosts || []).map((h) => el('button', { class: 'outline', title: 'Remover', onclick: (e) => { st.trustedHosts = st.trustedHosts.filter((x) => x !== h); e.currentTarget.remove(); } }, h, ic('x', 'sm')))) : null,
-      el('h3', { style: { marginTop: '8px' } }, 'Ponto (assistente)'),
-      el('div', { class: 'hint' }, 'Quando um agente termina um turno, o Ponto resume o que aconteceu e sugere próximos passos clicáveis. Usa um CLI de LLM local ao seu gosto (recebe o prompt no stdin, devolve JSON).'),
-      el('div', { class: 'row' }, el('label', {}, el('input', { type: 'checkbox', checked: !!st.assistant?.enabled, onchange: (e) => { st.assistant = { ...st.assistant, enabled: e.target.checked }; } }), ' Ativar resumos automáticos')),
-      el('div', { class: 'row' }, el('label', {}, 'Comando'), el('input', { type: 'text', value: st.assistant?.command || 'claude -p --model haiku', oninput: (e) => { st.assistant = { ...st.assistant, command: e.target.value }; } })),
-      el('div', { class: 'hint' }, 'Alternativas: ', el('code', {}, 'ollama run llama3.2'), ', ', el('code', {}, 'codex exec -'), '.'),
-      el('h3', { style: { marginTop: '8px' } }, 'Integração com agentes'),
+      el('div', { class: 'row' }, el('label', {}, el('input', { type: 'checkbox', checked: st.notifications !== false, onchange: (e) => { st.notifications = e.target.checked; } }), ' ', t('Notificar quando um agente terminar ou pedir permissão (com a janela sem foco)'))),
+      el('div', { class: 'row' }, el('label', {}, t('Tema')), el('select', { onchange: (e) => { st.theme = e.target.value; } },
+        [['light', t('Claro')], ['dark', t('Escuro')], ['system', t('Sistema')]].map(([v, l]) => el('option', { value: v, selected: (st.theme || 'light') === v }, l)))),
+      el('div', { class: 'row' }, el('button', { class: 'outline', onclick: () => { close(); onboarding(); } }, ic('wand-sparkles'), t('Abrir o assistente de configuração'))),
+      (st.trustedHosts || []).length ? el('div', { class: 'row' }, el('label', {}, t('Sites confiáveis (certificado):')),
+        ...(st.trustedHosts || []).map((h) => el('button', { class: 'outline', title: t('Remover'), onclick: (e) => { st.trustedHosts = st.trustedHosts.filter((x) => x !== h); e.currentTarget.remove(); } }, h, ic('x', 'sm')))) : null,
+      el('h3', { style: { marginTop: '8px' } }, t('Ponto (assistente)')),
+      el('div', { class: 'hint' }, t('Quando um agente termina um turno, o Ponto resume o que aconteceu e sugere próximos passos clicáveis. Usa um CLI de LLM local ao seu gosto (recebe o prompt no stdin, devolve JSON).')),
+      el('div', { class: 'row' }, el('label', {}, el('input', { type: 'checkbox', checked: !!st.assistant?.enabled, onchange: (e) => { st.assistant = { ...st.assistant, enabled: e.target.checked }; } }), ' ', t('Ativar resumos automáticos'))),
+      el('div', { class: 'row' }, el('label', {}, t('Comando')), el('input', { type: 'text', value: st.assistant?.command || 'claude -p --model haiku', oninput: (e) => { st.assistant = { ...st.assistant, command: e.target.value }; } })),
+      el('div', { class: 'hint' }, t('Alternativas:'), ' ', el('code', {}, 'ollama run llama3.2'), ', ', el('code', {}, 'codex exec -'), '.'),
+      el('h3', { style: { marginTop: '8px' } }, t('Integração com agentes')),
       el('div', { class: 'row' },
-        el('button', { class: 'outline', onclick: async () => { const d = await api.skillInstall(); toast('Skill instalada em:\n' + d.join('\n')); } }, ic('sparkles'), 'Instalar skill "regente" (~/.claude/skills e ~/.agents/skills)')),
-      el('h3', { style: { marginTop: '8px' } }, 'Atualizações'),
-      el('div', { class: 'row' }, el('label', {}, el('input', { type: 'checkbox', checked: st.autoUpdate !== false, onchange: (e) => { st.autoUpdate = e.target.checked; } }), ' Procurar novas versões automaticamente')),
-      el('div', { class: 'row' }, el('span', { class: 'hint', style: { flex: 1 } }, `Versão ${S.state.version}`),
+        el('button', { class: 'outline', onclick: async () => { const d = await api.skillInstall(); toast(t('Skill instalada em:') + '\n' + d.join('\n')); } }, ic('sparkles'), t('Instalar skill "regente" (~/.claude/skills e ~/.agents/skills)'))),
+      el('h3', { style: { marginTop: '8px' } }, t('Atualizações')),
+      el('div', { class: 'row' }, el('label', {}, el('input', { type: 'checkbox', checked: st.autoUpdate !== false, onchange: (e) => { st.autoUpdate = e.target.checked; } }), ' ', t('Procurar novas versões automaticamente'))),
+      el('div', { class: 'row' }, el('span', { class: 'hint', style: { flex: 1 } }, t('Versão {v}', { v: S.state.version })),
         el('button', { class: 'outline', onclick: async () => {
           const s = await api.updateCheck();
-          toast({ disabled: 'Atualização automática só funciona no app instalado', none: 'Você já está na versão mais recente',
-            error: `Falha ao procurar atualização: ${s.message}` }[s.state] || `Versão ${s.version} disponível`, s.state === 'error');
-        } }, 'Verificar agora')),
+          toast({ disabled: t('Atualização automática só funciona no app instalado'), none: t('Você já está na versão mais recente'),
+            error: t('Falha ao procurar atualização: {msg}', { msg: s.message }) }[s.state] || t('Versão {v} disponível', { v: s.version }), s.state === 'error');
+        } }, t('Verificar agora'))),
       el('h3', { style: { marginTop: '8px' } }, 'Backups'),
-      el('div', { class: 'hint' }, 'Um backup automático por hora (os 48 mais recentes ficam guardados).'),
+      el('div', { class: 'hint' }, t('Um backup automático por hora (os 48 mais recentes ficam guardados).')),
       el('div', { class: 'row' },
-        el('button', { class: 'outline', onclick: async () => { await api.backupNow(); toast('Backup criado'); } }, 'Fazer backup agora'),
+        el('button', { class: 'outline', onclick: async () => { await api.backupNow(); toast(t('Backup criado')); } }, t('Fazer backup agora')),
         el('button', { class: 'outline', onclick: async () => {
           const files = await api.backupList();
-          if (!files.length) return toast('Nenhum backup ainda', true);
+          if (!files.length) return toast(t('Nenhum backup ainda'), true);
           close();
-          modal((c2) => [el('h3', {}, 'Restaurar backup'), el('div', { class: 'hint' }, 'O estado atual é salvo antes de restaurar. Os terminais são reiniciados.'),
+          modal((c2) => [el('h3', {}, t('Restaurar backup')), el('div', { class: 'hint' }, t('O estado atual é salvo antes de restaurar. Os terminais são reiniciados.')),
             el('div', { class: 'list' }, files.slice(0, 20).map((f) => el('div', { class: 'card' }, el('div', { class: 'row' }, el('span', { style: { flex: 1 } }, f),
-              el('button', { class: 'outline', onclick: () => { c2(); api.backupRestore(f); } }, 'Restaurar'))))),
-            el('div', { class: 'actions' }, el('button', { onclick: c2 }, 'Fechar'))]);
-        } }, 'Restaurar…')),
-      el('div', { class: 'hint' }, 'MCP: para dar as ferramentas do Regente como tools nativas a um agente, rode dentro do terminal dele: ', el('code', {}, 'claude mcp add regente -- regente mcp'), '. Dados locais em ', el('code', {}, S.state.dataDir), '.'),
-      el('div', { class: 'actions' }, el('button', { onclick: close }, 'Cancelar'),
+              el('button', { class: 'outline', onclick: () => { c2(); api.backupRestore(f); } }, t('Restaurar')))))),
+            el('div', { class: 'actions' }, el('button', { onclick: c2 }, t('Fechar')))]);
+        } }, t('Restaurar…'))),
+      el('div', { class: 'hint' }, t('MCP: para dar as ferramentas do Regente como tools nativas a um agente, rode dentro do terminal dele:'), ' ', el('code', {}, 'claude mcp add regente -- regente mcp'), '. ', t('Dados locais em'), ' ', el('code', {}, S.state.dataDir), '.'),
+      el('div', { class: 'actions' }, el('button', { onclick: close }, t('Cancelar')),
         el('button', { class: 'primary', onclick: () => {
+          const langChanged = (st.language || 'auto') !== (S.state.settings.language || 'auto');
           S.state.agents = agents; S.state.settings = st;
-          api.patchState({ agents, settings: st }); applyTheme(st.theme); close(); toast('Configurações salvas (fonte vale para novos terminais)');
-        } }, 'Salvar')),
+          api.patchState({ agents, settings: st }); applyTheme(st.theme); close();
+          // Idioma novo: recarrega a interface (os terminais continuam rodando no processo principal).
+          if (langChanged) location.reload();
+          else toast(t('Configurações salvas (fonte vale para novos terminais)'));
+        } }, t('Salvar'))),
     ];
   });
 }
@@ -1166,9 +1189,9 @@ function updateBanner(s) {
   document.querySelector('.toast.update')?.remove();
   const ready = s.state === 'ready';
   document.body.append(el('div', { class: 'toast update' },
-    `Regente ${s.version} ${ready ? 'baixado' : 'disponível'}`,
-    el('button', { class: 'primary', onclick: () => api.updateInstall() }, ready ? 'Reiniciar e atualizar' : 'Baixar'),
-    el('button', { onclick: (e) => e.currentTarget.parentElement.remove() }, 'Depois')));
+    t(ready ? 'Regente {v} baixado' : 'Regente {v} disponível', { v: s.version }),
+    el('button', { class: 'primary', onclick: () => api.updateInstall() }, ready ? t('Reiniciar e atualizar') : t('Baixar')),
+    el('button', { onclick: (e) => e.currentTarget.parentElement.remove() }, t('Depois'))));
 }
 
 function wireEvents() {
@@ -1214,6 +1237,30 @@ function toggleSidebar(force) {
   api.patchState({ settings: settings() });
 }
 
+function setLanguage(setting) {
+  const lang = I18N.resolve(setting, navigator.language);
+  I18N.setLang(lang);
+  document.documentElement.lang = { pt: 'pt-BR', en: 'en', es: 'es' }[lang];
+}
+
+// Textos fixos do index.html: guarda o original (pt) para poder retraduzir ao trocar de idioma.
+const staticText = new Map();
+function refreshStatic() {
+  if (!staticText.size) {
+    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n; (n = walk.nextNode());) if (n.textContent.trim()) staticText.set(n, n.textContent);
+    for (const e of document.querySelectorAll('[title], [placeholder]')) {
+      if (e.title) staticText.set([e, 'title'], e.title);
+      if (e.placeholder) staticText.set([e, 'placeholder'], e.placeholder);
+    }
+  }
+  for (const [k, orig] of staticText) {
+    const lead = orig.match(/^\s*/)[0], trail = orig.match(/\s*$/)[0];
+    const text = lead + t(orig.trim()) + trail;
+    if (Array.isArray(k)) k[0][k[1]] = text; else k.textContent = text;
+  }
+}
+
 function applyTheme(theme) {
   const t = theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
   document.documentElement.dataset.theme = t || 'light';
@@ -1223,7 +1270,7 @@ function applyTheme(theme) {
 
 function renderDrawbar() {
   $('#swatches').replaceChildren(...SWATCHES.map((c) => el('span', {
-    class: 'swatch' + (c === S.color ? ' on' : ''), style: { background: c },
+    class: 'swatch' + (c === S.color ? ' on' : ''), style: { background: ink(c) },
     onclick: () => { S.color = c; renderDrawbar(); },
   })));
   $('#stroke-size').textContent = S.stroke;
@@ -1233,7 +1280,7 @@ function wireToolbar() {
   hydrateIcons();
   $('#btn-new-ws').onclick = () => newWorkspace();
   $('#btn-new-group').onclick = async () => {
-    const g = await prompt('Novo grupo (projeto)', 'Novo projeto');
+    const g = await prompt(t('Novo grupo (projeto)'), t('Novo projeto'));
     if (!g) return;
     settings().groups = [...new Set([...(settings().groups || []), g])];
     api.patchState({ settings: settings() });
@@ -1255,8 +1302,8 @@ function wireToolbar() {
     const root = S.ws.parentId || S.ws.id;
     const floors = S.state.workspaces.filter((w) => w.floor && w.parentId === root);
     menuBelow(e.currentTarget, [
-      { label: 'Novo andar deste workspace', hint: 'Ctrl+Shift+F', action: () => createFloor() },
-      ...(floors.length ? ['sep', ...floors.map((w) => ({ label: w.name, hint: w.floor.branch || 'cópia', action: () => showWorkspace(w.id) }))] : []),
+      { label: t('Novo andar deste workspace'), hint: 'Ctrl+Shift+F', action: () => createFloor() },
+      ...(floors.length ? ['sep', ...floors.map((w) => ({ label: w.name, hint: w.floor.branch || t('cópia'), action: () => showWorkspace(w.id) }))] : []),
     ]);
   };
   $('#btn-palette').onclick = () => palette();
@@ -1285,7 +1332,7 @@ function palette() {
   let sel = 0;
   let results = [];
   modal((close) => {
-    const input = el('input', { type: 'text', placeholder: 'Buscar agentes, notas, portais, workspaces…  (">" busca dentro das notas)' });
+    const input = el('input', { type: 'text', placeholder: t('Buscar agentes, notas, portais, workspaces…  (">" busca dentro das notas)') });
     const list = el('div', { class: 'results' });
     const scopes = el('div', { class: 'scopes' });
     const go = (r) => { close(); r.action(); };
@@ -1308,16 +1355,16 @@ function palette() {
             if (scope === 'working' && st !== 'working') continue;
             const hay = `${n.title} ${n.agent || ''} ${n.url || ''} ${S.titles[n.id] || ''}`.toLowerCase();
             if (q && !hay.includes(q)) continue;
-            out.push({ icon: { terminal: 'square-terminal', note: 'sticky-note', portal: 'globe' }[n.type], label: n.title, hint: `${w.name}${st ? ' · ' + st : ''}`, action: () => focusNode(w.id, n.id) });
+            out.push({ icon: { terminal: 'square-terminal', note: 'sticky-note', portal: 'globe' }[n.type], label: n.title, hint: `${w.name}${st ? ' · ' + t(st) : ''}`, action: () => focusNode(w.id, n.id) });
           }
         }
       }
       results = out.slice(0, 60);
       sel = Math.min(sel, Math.max(0, results.length - 1));
       list.replaceChildren(...results.map((r, i) => el('div', { class: 'res' + (i === sel ? ' on' : ''), onclick: () => go(r) }, ic(r.icon), el('span', {}, r.label), el('small', {}, r.hint))));
-      if (!results.length) list.append(el('div', { class: 'hint', style: { padding: '8px 10px' } }, 'Nada encontrado.'));
+      if (!results.length) list.append(el('div', { class: 'hint', style: { padding: '8px 10px' } }, t('Nada encontrado.')));
     };
-    const renderScopes = () => scopes.replaceChildren(...[['all', 'Tudo'], ['waiting', 'Precisam de você'], ['working', 'Trabalhando']].map(([k, label]) =>
+    const renderScopes = () => scopes.replaceChildren(...[['all', t('Tudo')], ['waiting', t('Precisam de você')], ['working', t('Trabalhando')]].map(([k, label]) =>
       el('button', { class: scope === k ? 'active' : '', onclick: () => { scope = k; renderScopes(); search(); input.focus(); } }, label)));
     input.addEventListener('input', () => { sel = 0; search(); });
     input.addEventListener('keydown', (e) => {
@@ -1345,39 +1392,39 @@ async function routinesModal() {
   modal((close) => {
     const form = { target: S.selected && terms.find((t) => t.id === S.selected) ? S.selected : terms[0]?.id, kind: 'every', when: '30m', prompt: '' };
     const targetSel = el('select', { onchange: (e) => { form.target = e.target.value; } },
-      el('option', { value: '__reminder' }, '🔔 Lembrete (notificação)'),
+      el('option', { value: '__reminder' }, '🔔 ' + t('Lembrete (notificação)')),
       terms.map((t) => el('option', { value: t.id, selected: t.id === form.target }, `${t.title} — ${t.wsName}`)));
     const kindSel = el('select', { onchange: (e) => { form.kind = e.target.value; whenIn.placeholder = { every: '30m, 2h, 1h30m', daily: '09:00', weekly: 'mon,fri@18:00', once: '10m' }[form.kind]; } },
-      el('option', { value: 'every' }, 'A cada'), el('option', { value: 'daily' }, 'Todo dia às'), el('option', { value: 'weekly' }, 'Semanal'), el('option', { value: 'once' }, 'Uma vez daqui a'));
+      el('option', { value: 'every' }, t('A cada')), el('option', { value: 'daily' }, t('Todo dia às')), el('option', { value: 'weekly' }, t('Semanal')), el('option', { value: 'once' }, t('Uma vez daqui a')));
     const whenIn = el('input', { type: 'text', value: form.when, oninput: (e) => { form.when = e.target.value; } });
-    const promptIn = el('textarea', { placeholder: 'Prompt entregue ao agente (ex.: "rode os testes e me avise se algo quebrou")', oninput: (e) => { form.prompt = e.target.value; } });
+    const promptIn = el('textarea', { placeholder: t('Prompt entregue ao agente (ex.: "rode os testes e me avise se algo quebrou")'), oninput: (e) => { form.prompt = e.target.value; } });
     return [
-      el('h3', {}, 'Rotinas'),
-      el('div', { class: 'hint' }, 'Prompts agendados entregues a um agente. Se o agente estiver ocupado, o disparo é pulado. Agentes também criam rotinas com ', el('code', {}, 'regente routine add'), '.'),
+      el('h3', {}, t('Rotinas')),
+      el('div', { class: 'hint' }, t('Prompts agendados entregues a um agente. Se o agente estiver ocupado, o disparo é pulado. Agentes também criam rotinas com'), ' ', el('code', {}, 'regente routine add'), '.'),
       el('div', { class: 'list' }, list.length ? list.map((r) => el('div', { class: 'card' },
         el('div', { class: 'row' },
-          el('b', { style: { flex: 1 } }, r.reminder ? 'Lembrete' : terms.find((t) => t.id === r.target)?.title || '(terminal removido)'),
-          el('span', { class: 'hint' }, r.every ? `a cada ${Math.round(r.every / 60000)} min` : r.daily ? `diário ${r.daily}` : r.weekly ? r.weekly : 'uma vez'),
-          el('span', { class: 'hint' }, r.enabled ? `próx. ${new Date(r.next).toLocaleTimeString()}` : 'pausada'),
-          el('button', { class: 'outline', onclick: async () => { await api.routineUpdate(r.id, { enabled: !r.enabled }); close(); routinesModal(); } }, r.enabled ? 'Pausar' : 'Ativar'),
+          el('b', { style: { flex: 1 } }, r.reminder ? t('Lembrete') : terms.find((x) => x.id === r.target)?.title || t('(terminal removido)')),
+          el('span', { class: 'hint' }, r.every ? t('a cada {n} min', { n: Math.round(r.every / 60000) }) : r.daily ? t('diário {h}', { h: r.daily }) : r.weekly ? r.weekly : t('uma vez')),
+          el('span', { class: 'hint' }, r.enabled ? t('próx. {h}', { h: new Date(r.next).toLocaleTimeString() }) : t('pausada')),
+          el('button', { class: 'outline', onclick: async () => { await api.routineUpdate(r.id, { enabled: !r.enabled }); close(); routinesModal(); } }, r.enabled ? t('Pausar') : t('Ativar')),
           el('button', { class: 'danger', onclick: async () => { await api.routineRemove(r.id); close(); routinesModal(); } }, ic('x'))),
         el('div', {}, r.prompt),
-        r.lastResult && el('div', { class: 'hint' }, `${r.runs} execuções · último: ${r.lastResult}`))) : el('div', { class: 'hint' }, 'Nenhuma rotina.')),
-      el('h3', { style: { marginTop: '8px' } }, 'Nova rotina'),
+        r.lastResult && el('div', { class: 'hint' }, t('{n} execuções · último: {r}', { n: r.runs, r: t(r.lastResult) })))) : el('div', { class: 'hint' }, t('Nenhuma rotina.'))),
+      el('h3', { style: { marginTop: '8px' } }, t('Nova rotina')),
       el('div', { class: 'row' }, targetSel),
       el('div', { class: 'row' }, kindSel, whenIn),
       promptIn,
-      el('div', { class: 'actions' }, el('button', { onclick: close }, 'Fechar'), el('button', {
+      el('div', { class: 'actions' }, el('button', { onclick: close }, t('Fechar')), el('button', {
         class: 'primary',
         onclick: async () => {
-          if (!form.prompt.trim()) return toast('Escreva o prompt', true);
+          if (!form.prompt.trim()) return toast(t('Escreva o prompt'), true);
           try {
             const reminder = form.target === '__reminder';
             await api.routineAdd({ target: reminder ? null : form.target, reminder, prompt: form.prompt.trim(), [form.kind]: form.when });
-            close(); routinesModal(); toast('Rotina criada');
-          } catch (e) { toast(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true); }
+            close(); routinesModal(); toast(t('Rotina criada'));
+          } catch (e) { toast(t(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), true); }
         },
-      }, 'Criar rotina')),
+      }, t('Criar rotina'))),
     ];
   });
 }
@@ -1385,8 +1432,8 @@ async function routinesModal() {
 // ---------- Ponto (assistente) ----------
 
 async function askAssistant(id) {
-  toast('Ponto está lendo o terminal…');
-  try { await api.assistantAsk(id); } catch (e) { toast(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), true); }
+  toast(t('Ponto está lendo o terminal…'));
+  try { await api.assistantAsk(id); } catch (e) { toast(t(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), true); }
 }
 
 function showCard(c) {
@@ -1394,8 +1441,8 @@ function showCard(c) {
   const card = el('div', { class: 'card' },
     el('div', { class: 'head' }, ic('sparkles'), el('span', { style: { flex: 1 } }, c.title), el('button', { class: 'ghost', onclick: () => card.remove() }, ic('x', 'sm'))),
     el('div', {}, c.summary),
-    el('div', { class: 'chips' }, c.followups.map((f) => el('button', { class: 'chip', onclick: () => { api.termSubmit(c.id, f); card.remove(); toast(`Enviado para ${c.title}`); } }, f))),
-    el('button', { class: 'ghost', style: { alignSelf: 'flex-start', padding: '2px 0' }, onclick: () => { focusNode(c.workspaceId, c.id); } }, 'Ir para o agente →'));
+    el('div', { class: 'chips' }, c.followups.map((f) => el('button', { class: 'chip', onclick: () => { api.termSubmit(c.id, f); card.remove(); toast(t('Enviado para {name}', { name: c.title })); } }, f))),
+    el('button', { class: 'ghost', style: { alignSelf: 'flex-start', padding: '2px 0' }, onclick: () => { focusNode(c.workspaceId, c.id); } }, t('Ir para o agente →')));
   box.append(card);
   while (box.children.length > 3) box.firstChild.remove();
   setTimeout(() => card.remove(), 120000);
@@ -1404,6 +1451,8 @@ function showCard(c) {
 async function init() {
   S.state = await api.getState();
   S.statuses = await api.termStatuses();
+  setLanguage(settings().language);
+  refreshStatic();
   applyTheme(settings().theme);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(settings().theme));
   wireEvents();

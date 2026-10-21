@@ -10,11 +10,11 @@ module.exports = async ({ win, store, sessions, shot, wait }) => {
   // Assistente de configuração da primeira execução.
   assert(await exec(`!!document.querySelector('.wizard')`), 'wizard aparece na primeira execução');
   const clickText = (t) => exec(`[...document.querySelectorAll('.modal button')].find((b) => b.textContent.trim() === ${JSON.stringify(t)}).click()`);
-  for (let i = 0; i < 6; i++) {
-    await wait(i === 2 ? 2500 : 300); // passo dos agentes espera a detecção
+  for (let i = 0; i < 7; i++) {
+    await wait(i === 3 ? 2500 : 300); // passo dos agentes espera a detecção
     await shot(path.join(out, `regente-wizard-${i}.png`));
-    if (i === 4) await exec(`[...document.querySelectorAll('.choice')].pop().click()`); // canvas vazio
-    if (i === 5) {
+    if (i === 5) await exec(`[...document.querySelectorAll('.choice')].pop().click()`); // canvas vazio
+    if (i === 6) {
       await exec(`document.querySelector('.check input').click()`); // não instala a skill no teste
       await clickText('Abrir o canvas');
     } else await clickText(i === 0 ? 'Começar' : 'Continuar');
@@ -94,5 +94,37 @@ module.exports = async ({ win, store, sessions, shot, wait }) => {
     await exec(`document.querySelector('.modal-back').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`);
     await wait(200);
   }
+  // Shell criado pela UI precisa iniciar a sessão (o term:start não pode chegar antes do save).
+  await exec(`document.querySelector('#btn-add-term').click()`);
+  await wait(200);
+  await exec(`[...document.querySelectorAll('.menu .item')].find((i) => i.textContent.startsWith('Shell')).click()`);
+  await wait(1500);
+  const shellNode = store.workspace(ws.id).nodes.find((n) => n.title === 'Shell 1');
+  assert(shellNode, 'shell criado pela UI foi salvo');
+  assert(sessions.get(shellNode.id), 'shell criado pela UI tem sessão rodando');
+
+  // Seletor de papel é um menu do app, não um <select> nativo.
+  assert(!(await exec(`!!document.querySelector('.node-head select')`)), 'cabeçalho sem <select> nativo');
+  await exec(`document.querySelector('.node[data-id="${shellNode.id}"] .role-pick').click()`);
+  await wait(200);
+  await exec(`[...document.querySelectorAll('.menu .item')].find((i) => i.textContent === 'Revisor').click()`);
+  await wait(300);
+  assert.strictEqual(store.workspace(ws.id).nodes.find((n) => n.id === shellNode.id).roleId, 'r-review', 'papel escolhido pelo menu');
+
+  // Trocar cor do ícone abre o seletor de cores.
+  await exec(`document.querySelector('.ws-row').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 100, clientY: 100 }))`);
+  await wait(200);
+  await exec(`[...document.querySelectorAll('.menu .item')].find((i) => i.textContent === 'Trocar cor do ícone').click()`);
+  await wait(200);
+  assert(await exec(`!!document.querySelector('.color-picker .swatch')`), 'seletor de cores aberto');
+  await exec(`document.querySelectorAll('.color-picker .swatch')[2].click()`);
+  await wait(400);
+  assert.strictEqual(store.state.workspaces[0].color, '#a23fc9', 'cor escolhida salva');
+
+  // Idioma: inglês traduz textos fixos e dinâmicos.
+  await exec(`RegenteI18n.setLang('en')`);
+  assert.strictEqual(await exec(`RegenteI18n.t('sem papel')`), 'no role');
+  assert.strictEqual(await exec(`RegenteI18n.t('Andar criado em {dir}', { dir: '/x' })`), 'Floor created at /x');
+  await exec(`RegenteI18n.setLang('pt')`);
   console.log('E2E OK');
 };

@@ -1,5 +1,8 @@
 // Utilitários de DOM: criação de elementos, menus, modais e toasts.
 
+// Tradução (src/shared/i18n.js, carregado antes dos módulos).
+export const t = (key, vars) => window.RegenteI18n.t(key, vars);
+
 export function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -23,22 +26,41 @@ export function toast(msg, error = false) {
 let openMenu = null;
 export function closeMenu() { openMenu?.remove(); openMenu = null; }
 
-// items: [{ label, hint, action } | 'sep']
-export function menu(x, y, items) {
+// Caixa flutuante posicionada em (x, y), fechada ao clicar fora. Base de menus e seletores.
+export function popover(x, y, content, cls = 'menu') {
   closeMenu();
-  const m = el('div', { class: 'menu' });
-  for (const it of items) {
-    if (it === 'sep') { m.append(el('div', { class: 'sep' })); continue; }
-    m.append(el('div', { class: 'item', onclick: () => { closeMenu(); it.action(); } }, el('span', {}, it.label), it.hint ? el('small', {}, it.hint) : null));
-  }
+  const m = el('div', { class: cls }, content);
   document.body.append(m);
   const r = m.getBoundingClientRect();
-  m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
-  m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  m.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+  m.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
   openMenu = m;
   setTimeout(() => document.addEventListener('pointerdown', function h(e) {
-    if (!m.contains(e.target)) { closeMenu(); document.removeEventListener('pointerdown', h, true); }
+    // Outro popover já tomou o lugar deste (ex.: item de menu que abre um seletor): só sai.
+    if (openMenu !== m) document.removeEventListener('pointerdown', h, true);
+    else if (!m.contains(e.target)) { closeMenu(); document.removeEventListener('pointerdown', h, true); }
   }, true));
+  return m;
+}
+
+// items: [{ label, hint, checked, action } | 'sep']
+export function menu(x, y, items) {
+  const nodes = items.map((it) => (it === 'sep' ? el('div', { class: 'sep' })
+    : el('div', { class: 'item' + (it.checked ? ' checked' : ''), onclick: () => { closeMenu(); it.action(); } },
+      el('span', {}, it.label), it.hint ? el('small', {}, it.hint) : it.checked ? ic('check', 'sm') : null)));
+  return popover(x, y, nodes);
+}
+
+// Paleta de cores: amostras prontas + seletor livre (input color nativo).
+export function colorPicker(x, y, colors, current, onPick) {
+  const pick = (c) => { closeMenu(); onPick(c); };
+  const custom = el('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(current || '') ? current : colors[0], onchange: (e) => pick(e.target.value) });
+  return popover(x, y, [
+    el('div', { class: 'color-grid' }, colors.map((c) => el('span', {
+      class: 'swatch' + (c.toLowerCase() === (current || '').toLowerCase() ? ' on' : ''), style: { background: c }, title: c, onclick: () => pick(c),
+    }))),
+    el('label', { class: 'color-custom' }, custom, el('span', {}, t('Cor personalizada…'))),
+  ], 'menu color-picker');
 }
 
 export function menuBelow(button, items) {
@@ -71,8 +93,8 @@ export function prompt(title, value = '', { hint } = {}) {
       hint ? el('div', { class: 'hint' }, hint) : null,
       input,
       el('div', { class: 'actions' },
-        el('button', { onclick: () => finish(null) }, 'Cancelar'),
-        el('button', { class: 'primary', onclick: () => finish(input.value.trim() || null) }, 'OK')),
+        el('button', { onclick: () => finish(null) }, t('Cancelar')),
+        el('button', { class: 'primary', onclick: () => finish(input.value.trim() || null) }, t('OK'))),
     ].filter(Boolean));
     input.select();
     const obs = new MutationObserver(() => { if (!input.isConnected) { obs.disconnect(); finish(null); } });
@@ -86,8 +108,8 @@ export function confirmBox(title, text) {
       el('h3', {}, title),
       el('div', { class: 'hint' }, text),
       el('div', { class: 'actions' },
-        el('button', { onclick: () => { c(); resolve(false); } }, 'Cancelar'),
-        el('button', { class: 'primary', onclick: () => { c(); resolve(true); } }, 'Confirmar')),
+        el('button', { onclick: () => { c(); resolve(false); } }, t('Cancelar')),
+        el('button', { class: 'primary', onclick: () => { c(); resolve(true); } }, t('Confirmar'))),
     ]);
     void close;
   });

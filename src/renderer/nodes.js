@@ -1,5 +1,5 @@
 // Conteúdo dos nós: terminal (xterm + compositor), nota (Markdown) e portal (webview).
-import { el, debounce, toast, ic, modal } from './ui.js';
+import { el, debounce, toast, ic, modal, menuBelow, t } from './ui.js';
 
 const api = window.regente;
 
@@ -87,30 +87,39 @@ export class TerminalView {
 
   showExit(code) {
     if (this.body.querySelector('.exit-overlay')) return;
-    this.body.append(el('div', { class: 'exit-overlay' }, `processo encerrado (${code})`,
-      el('button', { onclick: () => this.start(true) }, 'Reiniciar')));
+    this.body.append(el('div', { class: 'exit-overlay' }, t('processo encerrado ({code})', { code }),
+      el('button', { onclick: () => this.start(true) }, t('Reiniciar'))));
   }
 
   headerExtras() {
-    const roles = this.ctx.roles();
-    const roleSel = el('select', {
-      title: 'Papel do agente',
-      onchange: () => {
-        this.node.roleId = roleSel.value || undefined;
-        this.ctx.save();
-        const role = roles.find((r) => r.id === roleSel.value);
-        if (role) {
-          // O agente já está rodando: entrega o novo papel como mensagem.
-          api.termSubmit(this.node.id, `[Regente] A partir de agora seu papel é "${role.name}":\n${role.prompt}`);
-          toast(`Papel "${role.name}" enviado ao agente`);
-        }
-      },
-    }, el('option', { value: '' }, 'sem papel'), roles.map((r) => el('option', { value: r.id, selected: r.id === this.node.roleId }, r.name)));
+    // Seletor próprio em vez de <select>: o popup nativo ignora o tema do app.
+    const label = el('span');
+    const roleBtn = el('button', { class: 'role-pick', title: t('Papel do agente'), onclick: () => menuBelow(roleBtn, [
+      { label: t('sem papel'), checked: !this.node.roleId, action: () => setRole(null) },
+      'sep',
+      ...this.ctx.roles().map((r) => ({ label: t(r.name), checked: r.id === this.node.roleId, action: () => setRole(r) })),
+    ]) }, label, ic('chevron-down', 'sm'));
+    const paint = () => {
+      const role = this.ctx.roles().find((r) => r.id === this.node.roleId);
+      label.textContent = role ? t(role.name) : t('sem papel');
+      roleBtn.classList.toggle('set', !!role);
+    };
+    const setRole = (role) => {
+      this.node.roleId = role?.id;
+      this.ctx.save();
+      paint();
+      if (role) {
+        // O agente já está rodando: entrega o novo papel como mensagem.
+        api.termSubmit(this.node.id, t('[Regente] A partir de agora seu papel é "{name}":\n{prompt}', { name: t(role.name), prompt: t(role.prompt) }));
+        toast(t('Papel "{name}" enviado ao agente', { name: t(role.name) }));
+      }
+    };
+    paint();
     return [
-      roleSel,
-      el('button', { title: 'Compositor (Ctrl+I)', onclick: () => this.toggleComposer() }, ic('pencil')),
-      el('button', { title: 'Ponto: resumir e sugerir próximos passos', onclick: () => this.ctx.askAssistant(this.node.id) }, ic('sparkles')),
-      el('button', { title: 'Reiniciar agente', onclick: () => this.start(true) }, ic('rotate-cw')),
+      roleBtn,
+      el('button', { title: t('Compositor (Ctrl+I)'), onclick: () => this.toggleComposer() }, ic('pencil')),
+      el('button', { title: t('Ponto: resumir e sugerir próximos passos'), onclick: () => this.ctx.askAssistant(this.node.id) }, ic('sparkles')),
+      el('button', { title: t('Reiniciar agente'), onclick: () => this.start(true) }, ic('rotate-cw')),
     ];
   }
 
@@ -124,7 +133,7 @@ export class TerminalView {
       return;
     }
     if (this.composer) return this.composer.querySelector('textarea').focus();
-    const ta = el('textarea', { placeholder: 'Escreva para o agente…  Enter envia · Shift+Enter quebra linha · @ menciona conectados · cole imagens', value: this.draft });
+    const ta = el('textarea', { placeholder: t('Escreva para o agente…  Enter envia · Shift+Enter quebra linha · @ menciona conectados · cole imagens'), value: this.draft });
     const menuBox = el('div', { class: 'mention-menu', hidden: true });
     let options = [];
     let sel = 0;
@@ -166,9 +175,9 @@ export class TerminalView {
     });
     this.composer = el('div', { class: 'composer', onpointerdown: (e) => e.stopPropagation() },
       menuBox, ta,
-      el('div', { class: 'row' }, el('span', {}, `para ${this.node.title}`), el('span', { class: 'spacer' }),
-        el('button', { onclick: () => this.toggleComposer(false) }, 'Fechar'),
-        el('button', { class: 'active', onclick: () => this.sendComposer(ta) }, 'Enviar ⏎')));
+      el('div', { class: 'row' }, el('span', {}, t('para {name}', { name: this.node.title })), el('span', { class: 'spacer' }),
+        el('button', { onclick: () => this.toggleComposer(false) }, t('Fechar')),
+        el('button', { class: 'active', onclick: () => this.sendComposer(ta) }, t('Enviar ⏎'))));
     this.body.append(this.composer);
     ta.focus();
   }
@@ -184,7 +193,7 @@ export class TerminalView {
         refs.push(`- @${n.title} (${n.type}): \`${how}\``);
       }
     }
-    if (refs.length) text += `\n\nReferências no canvas:\n${refs.join('\n')}`;
+    if (refs.length) text += `\n\n${t('Referências no canvas:')}\n${refs.join('\n')}`;
     api.termSubmit(this.node.id, text);
     ta.value = '';
     this.draft = '';
@@ -207,7 +216,7 @@ export class NoteView {
   render() {
     if (this.editing) {
       const ta = el('textarea', {
-        value: this.text, placeholder: 'Markdown… agentes conectados podem escrever aqui (regente note)',
+        value: this.text, placeholder: t('Markdown… agentes conectados podem escrever aqui (regente note)'),
         oninput: () => { this.text = ta.value; this.saveSoon(); },
         onkeydown: (e) => { if (e.key === 'Escape') { this.editing = false; this.render(); } e.stopPropagation(); },
         onblur: () => { if (this.text) { this.editing = false; this.render(); } },
@@ -216,7 +225,7 @@ export class NoteView {
       if (this.body.isConnected) ta.focus();
     } else {
       const md = el('div', { class: 'md', ondblclick: () => { this.editing = true; this.render(); } });
-      md.innerHTML = window.marked.parse(this.text || '_vazia — duplo clique para editar_');
+      md.innerHTML = window.marked.parse(this.text || t('_vazia — duplo clique para editar_'));
       // Checkboxes de tarefas clicáveis.
       md.querySelectorAll('input[type=checkbox]').forEach((cb, i) => {
         cb.disabled = false;
@@ -250,8 +259,8 @@ export class NoteView {
 
   headerExtras() {
     return [
-      el('button', { title: 'Editar / visualizar', onclick: () => { this.editing = !this.editing; this.render(); } }, ic('pencil')),
-      el('button', { title: 'Abrir arquivo .md', onclick: async () => api.openPath(await api.notePath(this.node.id)) }, ic('external-link')),
+      el('button', { title: t('Editar / visualizar'), onclick: () => { this.editing = !this.editing; this.render(); } }, ic('pencil')),
+      el('button', { title: t('Abrir arquivo .md'), onclick: async () => api.openPath(await api.notePath(this.node.id)) }, ic('external-link')),
     ];
   }
 
@@ -288,10 +297,10 @@ export class PortalView {
     });
     this.body = el('div', { class: 'node-body portal-body' },
       el('div', { class: 'portal-bar', onpointerdown: (e) => e.stopPropagation() },
-        el('button', { title: 'Voltar', onclick: () => this.view.canGoBack() && this.view.goBack() }, ic('arrow-left')),
-        el('button', { title: 'Recarregar', onclick: () => this.view.reload() }, ic('rotate-cw')),
+        el('button', { title: t('Voltar'), onclick: () => this.view.canGoBack() && this.view.goBack() }, ic('arrow-left')),
+        el('button', { title: t('Recarregar'), onclick: () => this.view.reload() }, ic('rotate-cw')),
         this.url,
-        el('button', { title: 'Apontar e perguntar: recorte uma área e envie a um agente', onclick: () => this.startLasso() }, ic('crosshair'))),
+        el('button', { title: t('Apontar e perguntar: recorte uma área e envie a um agente'), onclick: () => this.startLasso() }, ic('crosshair'))),
       this.view);
   }
 
@@ -303,17 +312,17 @@ export class PortalView {
     const cert = code <= -200 && code > -300;
     const box = el('div', { class: 'portal-error', onpointerdown: (e) => e.stopPropagation() },
       ic(cert ? 'shield-alert' : 'wifi-off', 'big'),
-      el('h3', {}, cert ? 'Certificado não confiável' : 'Não foi possível abrir a página'),
+      el('h3', {}, cert ? t('Certificado não confiável') : t('Não foi possível abrir a página')),
       el('p', {}, cert
-        ? `O certificado HTTPS de ${host} não é reconhecido (${desc}). É comum em ambientes de desenvolvimento e homologação com certificado próprio.`
+        ? t('O certificado HTTPS de {host} não é reconhecido ({desc}). É comum em ambientes de desenvolvimento e homologação com certificado próprio.', { host, desc })
         : `${url} — ${desc} (${code})`),
       el('div', { class: 'row' },
         cert && el('button', {
           class: 'primary',
-          onclick: async () => { this.ctx.settings().trustedHosts = await api.portalTrust(host); toast(`${host} marcado como confiável`); this.view.loadURL(url); },
-        }, `Confiar em ${host} e abrir`),
-        el('button', { class: 'outline', onclick: () => this.view.loadURL(url) }, 'Tentar de novo')),
-      cert && el('small', {}, 'A exceção vale só para este host e pode ser removida em Configurações.'));
+          onclick: async () => { this.ctx.settings().trustedHosts = await api.portalTrust(host); toast(t('{host} marcado como confiável', { host })); this.view.loadURL(url); },
+        }, t('Confiar em {host} e abrir', { host })),
+        el('button', { class: 'outline', onclick: () => this.view.loadURL(url) }, t('Tentar de novo'))),
+      cert && el('small', {}, t('A exceção vale só para este host e pode ser removida em Configurações.')));
     this.body.append(box);
   }
 
@@ -384,24 +393,26 @@ export class PortalView {
 
   sendLasso(file, elements) {
     const targets = this.ctx.neighbors(this.node.id).filter((n) => n.type === 'terminal');
-    if (!targets.length) { toast('Conecte este portal a um agente para enviar recortes', true); return; }
+    if (!targets.length) { toast(t('Conecte este portal a um agente para enviar recortes'), true); return; }
     modal((close) => {
-      const ta = el('textarea', { placeholder: 'O que o agente deve fazer com esta área? (ex.: "este botão está desalinhado")' });
+      const ta = el('textarea', { placeholder: t('O que o agente deve fazer com esta área? (ex.: "este botão está desalinhado")') });
       const sel = el('select', {}, targets.map((t) => el('option', { value: t.id }, t.title)));
       return [
-        el('h3', {}, 'Apontar e perguntar'),
-        el('div', { class: 'hint' }, `${elements.length} elementos na região · imagem: ${file}`),
+        el('h3', {}, t('Apontar e perguntar')),
+        el('div', { class: 'hint' }, t('{n} elementos na região · imagem: {file}', { n: elements.length, file })),
         ta,
-        el('div', { class: 'row' }, el('label', {}, 'Enviar para'), sel),
-        el('div', { class: 'actions' }, el('button', { onclick: close }, 'Cancelar'), el('button', {
+        el('div', { class: 'row' }, el('label', {}, t('Enviar para')), sel),
+        el('div', { class: 'actions' }, el('button', { onclick: close }, t('Cancelar')), el('button', {
           class: 'primary',
           onclick: () => {
-            const text = `[Regente] Recorte do portal "${this.node.title}" (${this.view.getURL()}):\n${ta.value.trim() || '(sem comentário)'}\n\nImagem do recorte: ${file}\nElementos na região (tag#id "texto" [x,y,w,h]):\n${elements.map((x) => '- ' + x).join('\n')}`;
+            const text = t('[Regente] Recorte do portal "{name}" ({url}):\n{comment}\n\nImagem do recorte: {file}\nElementos na região (tag#id "texto" [x,y,w,h]):\n{elements}', {
+              name: this.node.title, url: this.view.getURL(), comment: ta.value.trim() || t('(sem comentário)'), file, elements: elements.map((x) => '- ' + x).join('\n'),
+            });
             api.termSubmit(sel.value, text);
             close();
-            toast('Recorte enviado');
+            toast(t('Recorte enviado'));
           },
-        }, 'Enviar')),
+        }, t('Enviar'))),
       ];
     });
   }

@@ -10,6 +10,14 @@ const { Bus } = require('./bus');
 const { Routines } = require('./routines');
 const { Assistant } = require('./assistant');
 const { Updater } = require('./updater');
+const i18n = require('../shared/i18n');
+
+i18n.define(require('../shared/locales'));
+// Idioma da configuração (ou do sistema), relido a cada uso para valer assim que o usuário trocar.
+const tr = (key, vars) => {
+  i18n.setLang(i18n.resolve(store.state.settings.language, app.isReady() ? app.getLocale() : 'pt'));
+  return i18n.t(key, vars);
+};
 
 app.setName('Regente');
 const dataDir = process.env.REGENTE_DATA || path.join(app.getPath('appData'), 'regente');
@@ -34,12 +42,8 @@ function installShim() {
   fs.writeFileSync(path.join(binDir, 'regente'), sh, { mode: 0o755 });
 }
 
-function systemPrompt(node, ws) {
-  const role = node.roleId && store.state.roles.find((r) => r.id === node.roleId);
-  const parts = [];
-  if (role) parts.push(`# Seu papel: ${role.name}\n${role.prompt}`);
-  parts.push(`# Regente
-Você está rodando dentro do Regente, um canvas onde vários agentes de IA trabalham juntos. Seu nome no canvas é "${node.title}" (workspace "${ws.name}").
+const SYSTEM_PROMPT = `# Regente
+Você está rodando dentro do Regente, um canvas onde vários agentes de IA trabalham juntos. Seu nome no canvas é "{title}" (workspace "{ws}").
 Você conversa com os nós conectados a você (outros agentes, notas e portais de navegador) pela CLI \`regente\` no shell:
 - \`regente peers\` lista quem está conectado; \`regente --help\` mostra tudo.
 - \`regente ask <nome> "<tarefa>"\` delega e espera a resposta; \`regente send <nome> "<msg>"\` só avisa.
@@ -47,7 +51,13 @@ Você conversa com os nós conectados a você (outros agentes, notas e portais d
 - \`regente portal <portal> snapshot|click <ref>|type <ref> <texto>|goto <url>\` controla um navegador conectado.
 - \`regente spawn claude --name <nome> --task "<tarefa>"\` cria um novo ajudante conectado a você.
 Quando chegar uma mensagem "[Regente] Tarefa de ... (id m-...)", faça a tarefa e SEMPRE finalize com \`regente reply <id> "<resultado>"\`.
-Se não houver nada conectado, apenas trabalhe normalmente e aguarde instruções do usuário.`);
+Se não houver nada conectado, apenas trabalhe normalmente e aguarde instruções do usuário.`;
+
+function systemPrompt(node, ws) {
+  const role = node.roleId && store.state.roles.find((r) => r.id === node.roleId);
+  const parts = [];
+  if (role) parts.push(tr('# Seu papel: {name}', { name: tr(role.name) }) + '\n' + tr(role.prompt));
+  parts.push(tr(SYSTEM_PROMPT, { title: node.title, ws: ws.name }));
   return parts.join('\n\n');
 }
 
@@ -107,7 +117,7 @@ function notify(title, body, onClick) {
   n.show();
 }
 
-const routines = new Routines({ store, sessions, deliver: (node, text) => bus.deliver(node, text), notify });
+const routines = new Routines({ store, sessions, deliver: (node, text) => bus.deliver(node, text), notify: (title, body) => notify(tr(title), body) });
 bus.routines = routines;
 const assistant = new Assistant({ store, sessions, send, env: () => {
   const env = { ...process.env, PATH: `${process.env.PATH}${extraPath()}` };
@@ -135,7 +145,7 @@ sessions.on('status', (id, status, prev) => {
   if (prev === 'working' && status === 'idle') assistant.onTurnEnd(id);
   if (!focused && prev === 'working' && (status === 'idle' || status === 'waiting') && Notification.isSupported()) {
     const n = new Notification({
-      title: `${hit.node.title} ${status === 'waiting' ? 'precisa de você' : 'terminou'}`,
+      title: tr(status === 'waiting' ? '{name} precisa de você' : '{name} terminou', { name: hit.node.title }),
       body: sessions.get(id)?.screenText(6).split('\n').filter((l) => l.trim()).slice(-3).join('\n') || hit.ws.name,
     });
     n.on('click', () => { win.show(); win.focus(); send('focus:node', { id, workspaceId: hit.ws.id }); });
