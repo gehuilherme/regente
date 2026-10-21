@@ -1,0 +1,63 @@
+# Testes a cada push e pull request: unitários (Linux e macOS) e ponta a ponta (Linux).
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Um push novo cancela a execução anterior do mesmo branch.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # O Ubuntu 24.04 bloqueia user namespaces sem privilégio, que o sandbox do Chromium usa.
+      - name: Liberar sandbox do Electron
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      # A janela é offscreen, mas o Electron no Linux ainda precisa de um display: xvfb fornece um virtual.
+      - name: E2E
+        run: |
+          mkdir -p "$REGENTE_SHOTS"
+          xvfb-run --auto-servernum npm run e2e
+        env:
+          REGENTE_DATA: ${{ runner.temp }}/regente-e2e
+          REGENTE_SHOTS: ${{ runner.temp }}/shots
+
+      - name: Guardar screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/shots/*.png
