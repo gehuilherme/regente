@@ -1,10 +1,11 @@
 {
   "name": "regente",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Canvas espacial para orquestrar agentes de IA (Claude Code, Codex, Gemini, OpenCode, shell)",
   "author": "Guilherme <guilhermehenrique1099@gmail.com>",
   "homepage": "https://github.com/gehuilherme/regente",
   "main": "src/main/main.js",
+  "desktopName": "regente.desktop",
   "scripts": {
     "start": "node scripts/electron.js",
     "test": "node --test test/*.test.js",
@@ -69,6 +70,8 @@
         "deb",
         "rpm"
       ],
+      "icon": "build/icons",
+      "syncDesktopName": true,
       "category": "Development",
       "maintainer": "Guilherme <guilhermehenrique1099@gmail.com>"
     },

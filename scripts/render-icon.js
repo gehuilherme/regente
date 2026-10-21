@@ -5,11 +5,14 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const OUT = [['build/icon.png', 1024], ['src/assets/icon.png', 512]];
+// build/icons/NxN.png é o conjunto do Linux: sem ele o .deb/.rpm só instala hicolor/1024x1024, que os temas não varrem.
+const LINUX = [16, 24, 32, 48, 64, 128, 256, 512].map((s) => [`build/icons/${s}x${s}.png`, s]);
+const OUT = [['build/icon.png', 1024], ['src/assets/icon.png', 512], ...LINUX];
 
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => {}); // não encerrar entre um tamanho e outro
 app.whenReady().then(async () => {
+  fs.mkdirSync(path.join(ROOT, 'build/icons'), { recursive: true });
   const svg = fs.readFileSync(path.join(ROOT, 'build/icon.svg')).toString('base64');
   for (const [file, size] of OUT) {
     const win = new BrowserWindow({ width: size, height: size, show: false, transparent: true, frame: false, useContentSize: true, webPreferences: { offscreen: true } });
