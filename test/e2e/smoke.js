@@ -66,6 +66,18 @@ module.exports = async ({ win, store, sessions, shot, wait }) => {
   console.log('--- resposta no Alfa ---\n' + aScreen);
   assert(/Resposta de Beta:\s*\n?4/.test(aScreen), 'Alfa recebeu a resposta');
 
+  // Idioma do usuário vale para as mensagens entre agentes e para a saída da CLI.
+  store.state.settings.language = 'en';
+  A.write('clear; regente ask Beta "2+3?" --timeout 30\r');
+  await wait(2500);
+  const bEn = B.screenText(40);
+  const idEn = (bEn.match(/id (m-[0-9a-f]+)/) || [])[1];
+  assert(/Task from "Alfa"/.test(bEn) && idEn, 'tarefa chegou em inglês:\n' + bEn);
+  B.write(`clear; regente reply ${idEn} "5"\r`);
+  await wait(1500);
+  assert(/Reply from Beta:\s*\n?5/.test(A.screenText(20)), 'CLI respondeu em inglês:\n' + A.screenText(20));
+  store.state.settings.language = 'pt';
+
   // Não conectado => recusado.
   A.write('clear; regente read Gama\r');
   await wait(1000);

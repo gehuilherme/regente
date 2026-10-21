@@ -36,20 +36,21 @@ const refRect = (ref) => `(() => {
 })()`;
 
 class Portals {
-  constructor() { this.byNode = new Map(); }
+  // tr é trocado pelo main.js pela tradução no idioma do usuário.
+  constructor() { this.byNode = new Map(); this.tr = require('../shared/i18n').t; }
 
   register(nodeId, wcId) { this.byNode.set(nodeId, wcId); }
 
   wc(nodeId) {
     const id = this.byNode.get(nodeId);
     const wc = id != null && webContents.fromId(id);
-    if (!wc || wc.isDestroyed()) throw new Error('portal não está aberto na tela (abra o workspace dele)');
+    if (!wc || wc.isDestroyed()) throw new Error(this.tr('portal não está aberto na tela (abra o workspace dele)'));
     return wc;
   }
 
   async click(wc, ref) {
     const p = await wc.executeJavaScript(refRect(ref));
-    if (!p) throw new Error(`ref ${ref} não encontrada; rode "portal snapshot" de novo`);
+    if (!p) throw new Error(this.tr('ref {ref} não encontrada; rode "portal snapshot" de novo', { ref }));
     for (const type of ['mouseMove', 'mouseDown', 'mouseUp']) {
       wc.sendInputEvent({ type, x: p.x, y: p.y, button: 'left', clickCount: 1 });
     }
@@ -66,7 +67,7 @@ class Portals {
         try {
           await wc.loadURL(url);
         } catch (e) {
-          if (/ERR_CERT/.test(e.message)) throw new Error(`certificado HTTPS inválido em ${url}. Peça ao usuário para clicar em "Confiar" no portal.`);
+          if (/ERR_CERT/.test(e.message)) throw new Error(this.tr('certificado HTTPS inválido em {url}. Peça ao usuário para clicar em "Confiar" no portal.', { url }));
           throw e;
         }
         return `abriu ${wc.getURL()}`;
@@ -94,7 +95,7 @@ class Portals {
         fs.writeFileSync(file, img.toPNG());
         return file;
       }
-      default: throw new Error(`ação de portal desconhecida: ${action}`);
+      default: throw new Error(this.tr('ação de portal desconhecida: {action}', { action }));
     }
   }
 

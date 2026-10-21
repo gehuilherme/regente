@@ -29,8 +29,8 @@ function nextRun(r, from = Date.now()) {
 }
 
 class Routines {
-  constructor({ store, sessions, deliver, notify }) {
-    Object.assign(this, { store, sessions, deliver, notify });
+  constructor({ store, sessions, deliver, notify, tr = (k, v) => k.replace(/\{(\w+)\}/g, (m, x) => v?.[x] ?? m) }) {
+    Object.assign(this, { store, sessions, deliver, notify, tr });
     store.state.routines ||= [];
     this.timer = setInterval(() => this.tick(), 5000);
   }
@@ -83,7 +83,7 @@ class Routines {
           const s = this.sessions.get(r.target);
           if (!hit || !s || s.status === 'exited') { r.lastResult = 'terminal não está rodando'; continue; }
           if (r.skipIfBusy && (s.status === 'working' || s.status === 'waiting')) { r.lastResult = 'pulado: terminal ocupado'; continue; }
-          this.deliver(hit.node, `[Regente] Rotina agendada:\n${r.prompt}`);
+          this.deliver(hit.node, this.tr('[Regente] Rotina agendada:\n{prompt}', { prompt: r.prompt }));
         }
         r.runs++;
         r.lastRun = now;

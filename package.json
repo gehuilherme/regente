@@ -42,7 +42,8 @@
     "asarUnpack": [
       "bin/**",
       "skills/**",
-      "node_modules/node-pty/**"
+      "node_modules/node-pty/**",
+      "src/shared/**"
     ],
     "directories": {
       "output": "dist"

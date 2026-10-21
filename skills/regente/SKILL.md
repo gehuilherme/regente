@@ -3,43 +3,46 @@ name: regente
 description: Coordinate with other AI agents, notes and browser portals on the Regente canvas. Use when running inside a Regente terminal (REGENTE_TOKEN is set) and you need to delegate work, ask another agent, report progress to a note, or drive a connected browser.
 ---
 
-# Regente: agentes conectados no canvas
+# Regente: connected agents on a canvas
 
-Você está num terminal do Regente se a variável `REGENTE_TOKEN` existir. Você só enxerga os nós
-**conectados a você por uma linha no canvas**. Rode `regente peers` para ver quem são.
+You are in a Regente terminal if `REGENTE_TOKEN` is set. You only see nodes **connected to you by a line
+on the canvas**; run `regente peers` to list them.
 
-## Conversar com outros agentes
+Regente messages follow the user's language (pt/en/es). Write to the user, to notes and to other agents
+in that language.
 
-- `regente ask <nome> "<tarefa>"` delega uma tarefa e **bloqueia até a resposta**. Use `--timeout <s>` para tarefas longas (padrão 1800). Rode tarefas independentes em paralelo, em background, quando fizer sentido.
-- `regente send <nome> "<mensagem>"` avisa sem esperar. Se o destino estiver ocupado, a mensagem entra na fila.
-- `regente broadcast "<mensagem>"` manda para todos os terminais conectados.
-- `regente read <nome> --lines 80` lê a tela de outro agente.
-- `regente wait <nome>` espera o agente ficar ocioso.
-- `regente keys <nome> 1 enter` envia teclas cruas, por exemplo para aprovar um prompt de permissão de um ajudante.
+## Talking to other agents
 
-**Quando receber** `[Regente] Tarefa de "X" (id m-...)`: faça a tarefa e termine SEMPRE com
-`regente reply <id> "<resultado>"`. Para resultados longos, use `echo "..." | regente reply <id> -`.
+- `regente ask <name> "<task>"` delegates and **blocks until the reply**. `--timeout <s>` for long tasks (default 1800). Run independent asks in parallel, in the background, when it makes sense.
+- `regente send <name> "<message>"` notifies without waiting; queued if the target is busy.
+- `regente broadcast "<message>"` sends to every connected terminal.
+- `regente read <name> --lines 80` reads another agent's screen.
+- `regente wait <name>` waits until the agent is idle.
+- `regente keys <name> 1 enter` sends raw keys, e.g. to approve a helper's permission prompt.
 
-## Criar ajudantes
+**When you receive** `[Regente] Task from "X" (id m-...)` (`Tarefa de` in Portuguese, `Tarea de` in Spanish):
+do the task and ALWAYS finish with `regente reply <id> "<result>"`. For long results: `echo "..." | regente reply <id> -`.
 
-`regente spawn claude --name Testes --role "Testador" --task "escreva testes para src/auth"` cria um
-agente novo ao seu lado, já conectado a você. Os agentes disponíveis são `claude`, `codex`, `gemini`, `opencode` e `shell`.
+## Spawning helpers
 
-## Notas
+`regente spawn claude --name Tests --role "Tester" --task "write tests for src/auth"` creates a new agent next
+to you, already connected. Agents: `claude`, `codex`, `gemini`, `opencode`, `shell`.
 
-`regente note <nota> read|write|append "<texto>"` lê e escreve notas Markdown conectadas. Use-as para
-registrar progresso, decisões e checklists (`- [ ] item`).
+## Notes
 
-## Portais (navegador)
+`regente note <note> read|write|append "<text>"` reads/writes connected Markdown notes. Use them for progress,
+decisions and checklists (`- [ ] item`).
+
+## Portals (browser)
 
 1. `regente portal <portal> goto http://localhost:3000`
-2. `regente portal <portal> snapshot` lista os elementos com refs: `[3] button "Entrar"`.
-3. `regente portal <portal> click 3`, `regente portal <portal> type 5 "texto" --submit`
-4. `regente portal <portal> text | screenshot [arquivo.png] | eval "<js>" | key Enter | scroll 600`
+2. `regente portal <portal> snapshot` lists elements with refs: `[3] button "Sign in"`.
+3. `regente portal <portal> click 3`, `regente portal <portal> type 5 "text" --submit`
+4. `regente portal <portal> text | screenshot [file.png] | eval "<js>" | key Enter | scroll 600`
 
-Rode `snapshot` de novo depois de navegar: as refs mudam.
+Run `snapshot` again after navigating: refs change.
 
-## Outros
+## Other
 
-- `regente status "<texto curto>"` mostra o que você está fazendo no seu nó.
-- `regente routine add "<prompt>" --every 30m` agenda prompts recorrentes. Use também `list` e `rm <id>`.
+- `regente status "<short text>"` shows what you're doing on your node.
+- `regente routine add "<prompt>" --every 30m` schedules recurring prompts; also `list` and `rm <id>`.

@@ -114,6 +114,7 @@
   'só andares git podem ser pousados automaticamente': ['only git floors can be landed automatically', 'solo los pisos git pueden aterrizarse automáticamente'],
   'o andar tem mudanças não commitadas; peça a um agente para commitar antes de pousar': ['the floor has uncommitted changes; ask an agent to commit before landing', 'el piso tiene cambios sin commit; pide a un agente que haga commit antes de aterrizar'],
   'não é um andar': ['not a floor', 'no es un piso'],
+  'o repositório original está em "{cur}", esperado "{base}"': ['the original repository is on "{cur}", expected "{base}"', 'el repositorio original está en "{cur}", se esperaba "{base}"'],
 
   // ---------- nós ----------
   'Duplo clique para renomear': ['Double-click to rename', 'Doble clic para renombrar'],
@@ -427,7 +428,7 @@ You talk to the nodes connected to you (other agents, notes and browser portals)
 - \`regente note <note> append "<text>"\` records progress/decisions in a connected note.
 - \`regente portal <portal> snapshot|click <ref>|type <ref> <text>|goto <url>\` controls a connected browser.
 - \`regente spawn claude --name <name> --task "<task>"\` creates a new helper connected to you.
-When a message "[Regente] Tarefa de ... (id m-...)" arrives (a task), do the task and ALWAYS finish with \`regente reply <id> "<result>"\`.
+When a message "[Regente] Task from ... (id m-...)" arrives, do the task and ALWAYS finish with \`regente reply <id> "<result>"\`.
 If nothing is connected, just work normally and wait for the user's instructions.`,
     `# Regente
 Estás ejecutándote dentro de Regente, un canvas donde varios agentes de IA trabajan juntos. Tu nombre en el canvas es "{title}" (workspace "{ws}").
@@ -437,6 +438,142 @@ Conversas con los nodos conectados a ti (otros agentes, notas y portales de nave
 - \`regente note <nota> append "<texto>"\` registra progreso/decisiones en una nota conectada.
 - \`regente portal <portal> snapshot|click <ref>|type <ref> <texto>|goto <url>\` controla un navegador conectado.
 - \`regente spawn claude --name <nombre> --task "<tarea>"\` crea un nuevo ayudante conectado a ti.
-Cuando llegue un mensaje "[Regente] Tarefa de ... (id m-...)" (una tarea), hazla y SIEMPRE termina con \`regente reply <id> "<resultado>"\`.
+Cuando llegue un mensaje "[Regente] Tarea de ... (id m-...)", haz la tarea y SIEMPRE termina con \`regente reply <id> "<resultado>"\`.
 Si no hay nada conectado, simplemente trabaja con normalidad y espera instrucciones del usuario.`],
+  // ---------- mensagens entre agentes (barramento) ----------
+  '[Regente] Mensagem de "{from}":\n{text}\n\n(Se precisar responder: regente send "{from}" "<mensagem>")': [
+    '[Regente] Message from "{from}":\n{text}\n\n(If you need to reply: regente send "{from}" "<message>")',
+    '[Regente] Mensaje de "{from}":\n{text}\n\n(Si necesitas responder: regente send "{from}" "<mensaje>")'],
+  '[Regente] Mensagem de "{from}" para todos:\n{text}': ['[Regente] Message from "{from}" to everyone:\n{text}', '[Regente] Mensaje de "{from}" para todos:\n{text}'],
+  '[Regente] Tarefa de "{from}" (id {id}):\n{text}\n\nIMPORTANTE: quando terminar, entregue o resultado rodando no shell:\nregente reply {id} "<resultado resumido>"   (ou: echo "<resultado longo>" | regente reply {id} -)': [
+    '[Regente] Task from "{from}" (id {id}):\n{text}\n\nIMPORTANT: when you finish, deliver the result by running in the shell:\nregente reply {id} "<short result>"   (or: echo "<long result>" | regente reply {id} -)',
+    '[Regente] Tarea de "{from}" (id {id}):\n{text}\n\nIMPORTANTE: cuando termines, entrega el resultado ejecutando en el shell:\nregente reply {id} "<resultado resumido>"   (o: echo "<resultado largo>" | regente reply {id} -)'],
+  '[Regente] Tarefa de "{from}":\n{text}': ['[Regente] Task from "{from}":\n{text}', '[Regente] Tarea de "{from}":\n{text}'],
+  '[Regente] Rotina agendada:\n{prompt}': ['[Regente] Scheduled routine:\n{prompt}', '[Regente] Rutina programada:\n{prompt}'],
+  'entregue': ['delivered', 'entregado'],
+  'na fila (destino está {status}); será entregue quando ficar ocioso': ['queued (target is {status}); it will be delivered when it becomes idle', 'en cola (el destino está {status}); se entregará cuando quede inactivo'],
+  'resposta entregue': ['reply delivered', 'respuesta entregada'],
+  'token inválido: este terminal não pertence ao Regente aberto': ['invalid token: this terminal doesn\'t belong to the running Regente', 'token inválido: esta terminal no pertenece al Regente abierto'],
+  'comando desconhecido: {cmd}': ['unknown command: {cmd}', 'comando desconocido: {cmd}'],
+  'nó removido do canvas': ['node removed from the canvas', 'nodo eliminado del canvas'],
+  'informe o destino (nome do nó conectado)': ['provide the target (name of the connected node)', 'indica el destino (nombre del nodo conectado)'],
+  'nenhum': ['none', 'ninguno'],
+  '"{ref}" não está conectado a você. Conectados: {names}': ['"{ref}" is not connected to you. Connected: {names}', '"{ref}" no está conectado a ti. Conectados: {names}'],
+  '"{name}" é {type}, não {want}': ['"{name}" is a {type}, not a {want}', '"{name}" es {type}, no {want}'],
+  'o terminal "{name}" não está rodando': ['terminal "{name}" is not running', 'la terminal "{name}" no está en ejecución'],
+  'nenhuma tarefa pendente com id {id} (talvez tenha expirado). Use: regente send <nome> "<texto>"': ['no pending task with id {id} (it may have expired). Use: regente send <name> "<text>"', 'ninguna tarea pendiente con id {id} (quizá expiró). Usa: regente send <nombre> "<texto>"'],
+  'op de nota: read | write | append': ['note op: read | write | append', 'op de nota: read | write | append'],
+  'nota "{name}" atualizada ({n} caracteres)': ['note "{name}" updated ({n} characters)', 'nota "{name}" actualizada ({n} caracteres)'],
+  'lembrete': ['reminder', 'recordatorio'],
+  'rotina removida': ['routine removed', 'rutina eliminada'],
+  'rotina não encontrada': ['routine not found', 'rutina no encontrada'],
+  'rotina {id} criada; próxima execução: {next}': ['routine {id} created; next run: {next}', 'rutina {id} creada; próxima ejecución: {next}'],
+  'uso: regente routine list | add ... | rm <id>': ['usage: regente routine list | add ... | rm <id>', 'uso: regente routine list | add ... | rm <id>'],
+  'agente desconhecido: {agent}. Disponíveis: {list}': ['unknown agent: {agent}. Available: {list}', 'agente desconocido: {agent}. Disponibles: {list}'],
+  'papel desconhecido: {role}': ['unknown role: {role}', 'rol desconocido: {role}'],
+  'portal não está aberto na tela (abra o workspace dele)': ['portal is not open on screen (open its workspace)', 'el portal no está abierto en pantalla (abre su workspace)'],
+  'ref {ref} não encontrada; rode "portal snapshot" de novo': ['ref {ref} not found; run "portal snapshot" again', 'ref {ref} no encontrada; ejecuta "portal snapshot" de nuevo'],
+  'certificado HTTPS inválido em {url}. Peça ao usuário para clicar em "Confiar" no portal.': ['invalid HTTPS certificate at {url}. Ask the user to click "Trust" in the portal.', 'certificado HTTPS inválido en {url}. Pide al usuario que haga clic en "Confiar" en el portal.'],
+  'ação de portal desconhecida: {action}': ['unknown portal action: {action}', 'acción de portal desconocida: {action}'],
+
+  // ---------- CLI regente ----------
+  'fora de um terminal do Regente (REGENTE_SOCK/REGENTE_TOKEN ausentes)': ['outside a Regente terminal (REGENTE_SOCK/REGENTE_TOKEN missing)', 'fuera de una terminal de Regente (faltan REGENTE_SOCK/REGENTE_TOKEN)'],
+  'não consegui falar com o Regente: {msg}': ['couldn\'t reach Regente: {msg}', 'no pude comunicarme con Regente: {msg}'],
+  '(nenhum nó conectado)': ['(no connected nodes)', '(ningún nodo conectado)'],
+  'papel: {role}': ['role: {role}', 'rol: {role}'],
+  '{from} terminou o turno sem "regente reply". Fim da tela dele:': ['{from} ended its turn without "regente reply". End of its screen:', '{from} terminó su turno sin "regente reply". Final de su pantalla:'],
+  'Resposta de {from}:': ['Reply from {from}:', 'Respuesta de {from}:'],
+  'Sem resposta dentro do tempo (status: {status}). Fim da tela do destino:': ['No reply in time (status: {status}). End of the target\'s screen:', 'Sin respuesta a tiempo (estado: {status}). Final de la pantalla del destino:'],
+  'método não suportado': ['method not supported', 'método no soportado'],
+  'erro:': ['error:', 'error:'],
+  'Lista os nós conectados a você no canvas (terminais/agentes, notas, portais) e seus estados.': ['Lists the nodes connected to you on the canvas (terminals/agents, notes, portals) and their states.', 'Lista los nodos conectados a ti en el canvas (terminales/agentes, notas, portales) y sus estados.'],
+  'Envia uma mensagem a um agente conectado (não espera resposta).': ['Sends a message to a connected agent (doesn\'t wait for a reply).', 'Envía un mensaje a un agente conectado (no espera respuesta).'],
+  'Delega uma tarefa a um agente conectado e espera a resposta dele.': ['Delegates a task to a connected agent and waits for its reply.', 'Delega una tarea a un agente conectado y espera su respuesta.'],
+  'Responde a uma tarefa recebida (id m-...).': ['Replies to a received task (id m-...).', 'Responde a una tarea recibida (id m-...).'],
+  'Lê a tela de um terminal, o conteúdo de uma nota ou o texto de um portal conectado.': ['Reads a terminal\'s screen, a note\'s content or a connected portal\'s text.', 'Lee la pantalla de una terminal, el contenido de una nota o el texto de un portal conectado.'],
+  'Espera um terminal conectado ficar ocioso.': ['Waits for a connected terminal to become idle.', 'Espera a que una terminal conectada quede inactiva.'],
+  'Lê/escreve/anexa numa nota conectada.': ['Reads/writes/appends to a connected note.', 'Lee/escribe/agrega en una nota conectada.'],
+  'Controla um portal (navegador) conectado. Ações: goto, snapshot, text, click, type, key, scroll, eval, screenshot, back, reload, url.': ['Controls a connected portal (browser). Actions: goto, snapshot, text, click, type, key, scroll, eval, screenshot, back, reload, url.', 'Controla un portal (navegador) conectado. Acciones: goto, snapshot, text, click, type, key, scroll, eval, screenshot, back, reload, url.'],
+  'Agenda prompts recorrentes. op=add (prompt + every|daily|weekly|once, terminal opcional), list ou rm (id).': ['Schedules recurring prompts. op=add (prompt + every|daily|weekly|once, optional terminal), list or rm (id).', 'Programa prompts recurrentes. op=add (prompt + every|daily|weekly|once, terminal opcional), list o rm (id).'],
+  'Mostra um status curto no seu nó do canvas.': ['Shows a short status on your canvas node.', 'Muestra un estado corto en tu nodo del canvas.'],
+  'Cria um novo agente conectado a você, opcionalmente com uma tarefa.': ['Creates a new agent connected to you, optionally with a task.', 'Crea un nuevo agente conectado a ti, opcionalmente con una tarea.'],
+  [`regente — orquestração entre agentes no canvas do Regente
+
+Você só enxerga nós conectados a você por uma linha no canvas.
+
+  regente whoami                         quem sou eu, workspace, conectados
+  regente peers                          lista nós conectados (terminais, notas, portais) e estado
+  regente send <nome> <texto|->          manda mensagem (enfileira se o destino estiver ocupado)
+  regente ask <nome> <texto|-> [--timeout s]
+                                         delega uma tarefa e ESPERA a resposta (regente reply)
+  regente reply <id> <texto|->           responde uma tarefa recebida via ask
+  regente broadcast <texto|->            manda para todos os terminais conectados
+  regente read <nome> [--lines N]        lê a tela de um terminal / conteúdo de nota / texto de portal
+  regente wait <nome> [--timeout s]      espera o terminal ficar ocioso e mostra o fim da tela
+  regente keys <nome> <tecla...>         teclas cruas (enter, esc, tab, up, down, ctrl-c, "1"...)
+  regente note <nome> read|write|append [texto|-]
+  regente portal <nome> <ação> ...       goto <url> | snapshot | text | click <ref> |
+                                         type <ref> <texto> [--submit] [--clear] | key <Tecla> |
+                                         scroll [dy] | eval <js> | screenshot [arquivo] | back | reload | url
+  regente status <texto>                 mostra um status curto no seu nó do canvas
+  regente spawn <agente> [--name N] [--role R] [--cwd D] [--task T]
+                                         cria um novo agente conectado a você (claude, codex, gemini, opencode, shell)
+  regente routine add "<prompt>" (--every 30m | --daily 09:00 | --weekly mon,fri@18:00 | --once 10m)
+                  [--terminal <nome>] [--reminder] [--count N] [--until 2026-12-31] [--no-skip-if-busy]
+  regente routine list | rm <id>         prompts agendados (padrão: entregues no seu próprio terminal)
+  regente mcp                            servidor MCP (stdio) com as mesmas ferramentas
+
+Use "-" no lugar do texto para ler do stdin.`]: [`regente — orchestration between agents on the Regente canvas
+
+You only see nodes connected to you by a line on the canvas.
+
+  regente whoami                         who am I, workspace, connected nodes
+  regente peers                          lists connected nodes (terminals, notes, portals) and their state
+  regente send <name> <text|->           sends a message (queued if the target is busy)
+  regente ask <name> <text|-> [--timeout s]
+                                         delegates a task and WAITS for the reply (regente reply)
+  regente reply <id> <text|->            replies to a task received via ask
+  regente broadcast <text|->             sends to every connected terminal
+  regente read <name> [--lines N]        reads a terminal's screen / note content / portal text
+  regente wait <name> [--timeout s]      waits for the terminal to go idle and shows the end of its screen
+  regente keys <name> <key...>           raw keys (enter, esc, tab, up, down, ctrl-c, "1"...)
+  regente note <name> read|write|append [text|-]
+  regente portal <name> <action> ...     goto <url> | snapshot | text | click <ref> |
+                                         type <ref> <text> [--submit] [--clear] | key <Key> |
+                                         scroll [dy] | eval <js> | screenshot [file] | back | reload | url
+  regente status <text>                  shows a short status on your canvas node
+  regente spawn <agent> [--name N] [--role R] [--cwd D] [--task T]
+                                         creates a new agent connected to you (claude, codex, gemini, opencode, shell)
+  regente routine add "<prompt>" (--every 30m | --daily 09:00 | --weekly mon,fri@18:00 | --once 10m)
+                  [--terminal <name>] [--reminder] [--count N] [--until 2026-12-31] [--no-skip-if-busy]
+  regente routine list | rm <id>         scheduled prompts (default: delivered to your own terminal)
+  regente mcp                            MCP server (stdio) with the same tools
+
+Use "-" instead of the text to read from stdin.`, `regente — orquestación entre agentes en el canvas de Regente
+
+Solo ves los nodos conectados a ti por una línea en el canvas.
+
+  regente whoami                         quién soy, workspace, conectados
+  regente peers                          lista nodos conectados (terminales, notas, portales) y su estado
+  regente send <nombre> <texto|->        envía un mensaje (en cola si el destino está ocupado)
+  regente ask <nombre> <texto|-> [--timeout s]
+                                         delega una tarea y ESPERA la respuesta (regente reply)
+  regente reply <id> <texto|->           responde una tarea recibida vía ask
+  regente broadcast <texto|->            envía a todas las terminales conectadas
+  regente read <nombre> [--lines N]      lee la pantalla de una terminal / contenido de nota / texto de portal
+  regente wait <nombre> [--timeout s]    espera a que la terminal quede inactiva y muestra el final de la pantalla
+  regente keys <nombre> <tecla...>       teclas crudas (enter, esc, tab, up, down, ctrl-c, "1"...)
+  regente note <nombre> read|write|append [texto|-]
+  regente portal <nombre> <acción> ...   goto <url> | snapshot | text | click <ref> |
+                                         type <ref> <texto> [--submit] [--clear] | key <Tecla> |
+                                         scroll [dy] | eval <js> | screenshot [archivo] | back | reload | url
+  regente status <texto>                 muestra un estado corto en tu nodo del canvas
+  regente spawn <agente> [--name N] [--role R] [--cwd D] [--task T]
+                                         crea un nuevo agente conectado a ti (claude, codex, gemini, opencode, shell)
+  regente routine add "<prompt>" (--every 30m | --daily 09:00 | --weekly mon,fri@18:00 | --once 10m)
+                  [--terminal <nombre>] [--reminder] [--count N] [--until 2026-12-31] [--no-skip-if-busy]
+  regente routine list | rm <id>         prompts programados (por defecto: entregados en tu propia terminal)
+  regente mcp                            servidor MCP (stdio) con las mismas herramientas
+
+Usa "-" en lugar del texto para leer de stdin.`],
 });

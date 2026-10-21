@@ -36,6 +36,9 @@ const SWATCHES = ['#1d1d1f', '#2f6df6', '#e5383b', '#26b36b', '#f0a020', '#a23fc
 // As 7 primeiras são as cores padrão por posição; o resto só aparece no seletor.
 const WS_COLORS = ['#2f6df6', '#26b36b', '#a23fc9', '#f0a020', '#e5383b', '#0f8ea1', '#8b8b93', '#9bc53d', '#f26b1d', '#e0457b', '#6c5ce7', '#8d6e63'];
 
+// Mensagem de erro vinda do processo principal, sem o prefixo técnico do IPC do Electron.
+const errMsg = (e) => t(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+
 const saveWs = debounce(() => S.ws && api.saveWorkspace(S.ws), 250);
 const saveView = debounce(() => S.ws && api.saveWorkspace(S.ws), 600);
 const settings = () => S.state.settings;
@@ -223,7 +226,7 @@ async function createFloor(w = S.ws) {
     S.state.workspaces.push(ws);
     showWorkspace(ws.id);
     toast(t('Andar criado em {dir}', { dir: ws.floor.dir }));
-  } catch (e) { toast(e.message, true); }
+  } catch (e) { toast(errMsg(e), true); }
 }
 
 function renderFloorbar() {
@@ -245,7 +248,7 @@ function renderFloorbar() {
 
 async function landFloor() {
   if (!(await confirmBox(t('Pousar andar'), t('Fazer merge da branch {branch} em {base} no repositório original?', S.ws.floor)))) return;
-  try { toast(await api.floorLand(S.ws.id) || t('Andar pousado')); } catch (e) { toast(e.message, true); }
+  try { toast(await api.floorLand(S.ws.id) || t('Andar pousado')); } catch (e) { toast(errMsg(e), true); }
 }
 
 async function discardFloor() {
@@ -255,7 +258,7 @@ async function discardFloor() {
     const next = await api.floorDiscard(S.ws.id);
     S.state.workspaces = S.state.workspaces.filter((w) => w.id !== S.ws.id);
     showWorkspace(next);
-  } catch (e) { toast(e.message, true); }
+  } catch (e) { toast(errMsg(e), true); }
 }
 
 // ---------- câmera ----------
@@ -1422,7 +1425,7 @@ async function routinesModal() {
             const reminder = form.target === '__reminder';
             await api.routineAdd({ target: reminder ? null : form.target, reminder, prompt: form.prompt.trim(), [form.kind]: form.when });
             close(); routinesModal(); toast(t('Rotina criada'));
-          } catch (e) { toast(t(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), true); }
+          } catch (e) { toast(errMsg(e), true); }
         },
       }, t('Criar rotina'))),
     ];
@@ -1433,7 +1436,7 @@ async function routinesModal() {
 
 async function askAssistant(id) {
   toast(t('Ponto está lendo o terminal…'));
-  try { await api.assistantAsk(id); } catch (e) { toast(t(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')), true); }
+  try { await api.assistantAsk(id); } catch (e) { toast(errMsg(e), true); }
 }
 
 function showCard(c) {

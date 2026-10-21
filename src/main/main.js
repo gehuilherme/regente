@@ -14,8 +14,9 @@ const i18n = require('../shared/i18n');
 
 i18n.define(require('../shared/locales'));
 // Idioma da configuração (ou do sistema), relido a cada uso para valer assim que o usuário trocar.
+const lang = () => i18n.resolve(store.state.settings.language, app.isReady() ? app.getLocale() : 'pt');
 const tr = (key, vars) => {
-  i18n.setLang(i18n.resolve(store.state.settings.language, app.isReady() ? app.getLocale() : 'pt'));
+  i18n.setLang(lang());
   return i18n.t(key, vars);
 };
 
@@ -79,7 +80,7 @@ function startSession(node, ws, cols, rows) {
   Object.assign(env, {
     TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Regente',
     PATH: `${binDir}:${env.PATH || '/usr/bin:/bin'}${extraPath()}`, REGENTE_BIN: binDir, REGENTE_EXTRA_PATH: extraPath(),
-    REGENTE_SOCK: socketPath, REGENTE_TOKEN: bus.tokenFor(node.id), REGENTE_NODE: node.id, REGENTE_NAME: node.title,
+    REGENTE_SOCK: socketPath, REGENTE_TOKEN: bus.tokenFor(node.id), REGENTE_NODE: node.id, REGENTE_NAME: node.title, REGENTE_LANG: lang(),
     REGENTE_SYSTEM_PROMPT: systemPrompt(node, ws),
   });
   let cwd = node.cwd || ws.cwd || os.homedir();
@@ -108,7 +109,8 @@ async function ui(event, payload) {
   send('bus:event', { event, ...payload });
 }
 
-const bus = new Bus({ store, sessions, portals, ui, socketPath });
+const bus = new Bus({ store, sessions, portals, ui, socketPath, tr, lang: () => lang() });
+portals.tr = tr;
 
 function notify(title, body, onClick) {
   if (!Notification.isSupported()) return;
@@ -117,7 +119,7 @@ function notify(title, body, onClick) {
   n.show();
 }
 
-const routines = new Routines({ store, sessions, deliver: (node, text) => bus.deliver(node, text), notify: (title, body) => notify(tr(title), body) });
+const routines = new Routines({ store, sessions, tr, deliver: (node, text) => bus.deliver(node, text), notify: (title, body) => notify(tr(title), body) });
 bus.routines = routines;
 const assistant = new Assistant({ store, sessions, send, env: () => {
   const env = { ...process.env, PATH: `${process.env.PATH}${extraPath()}` };
@@ -322,8 +324,11 @@ ipcMain.handle('open:path', (_e, p) => shell.openPath(p));
 
 // ---------- Andares (cópias isoladas do workspace) ----------
 
+// LANGUAGE faz o git (gettext) responder no idioma do usuário; sem tradução instalada, cai no inglês.
+const GIT_LANG = { pt: 'pt_BR:pt', en: 'en', es: 'es' };
 const git = (cwd, args) => new Promise((resolve, reject) =>
-  execFile('git', ['-C', cwd, ...args], { maxBuffer: 10 << 20 }, (err, out, errOut) => err ? reject(new Error((errOut || err.message).trim())) : resolve(out.trim())));
+  execFile('git', ['-C', cwd, ...args], { maxBuffer: 10 << 20, env: { ...process.env, LANGUAGE: GIT_LANG[lang()] } },
+    (err, out, errOut) => err ? reject(new Error((errOut || err.message).trim())) : resolve(out.trim())));
 
 function cloneWorkspace(src, name, fromDir, toDir) {
   const ws = JSON.parse(JSON.stringify(src));
@@ -374,17 +379,17 @@ ipcMain.handle('floor:create', async (_e, { workspaceId, name }) => {
 // "Pousar" um andar: faz merge da branch do andar na branch base do repositório original.
 ipcMain.handle('floor:land', async (_e, id) => {
   const ws = store.workspace(id);
-  if (ws?.floor?.kind !== 'git') throw new Error('só andares git podem ser pousados automaticamente');
+  if (ws?.floor?.kind !== 'git') throw new Error(tr('só andares git podem ser pousados automaticamente'));
   const status = await git(ws.floor.dir, ['status', '--porcelain']);
-  if (status) throw new Error('o andar tem mudanças não commitadas; peça a um agente para commitar antes de pousar');
+  if (status) throw new Error(tr('o andar tem mudanças não commitadas; peça a um agente para commitar antes de pousar'));
   const cur = await git(ws.floor.root, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  if (cur !== ws.floor.base) throw new Error(`o repositório original está em "${cur}", esperado "${ws.floor.base}"`);
+  if (cur !== ws.floor.base) throw new Error(tr('o repositório original está em "{cur}", esperado "{base}"', { cur, base: ws.floor.base }));
   return git(ws.floor.root, ['merge', '--no-ff', '-m', `Pousa andar ${ws.name}`, ws.floor.branch]);
 });
 
 ipcMain.handle('floor:discard', async (_e, id) => {
   const ws = store.workspace(id);
-  if (!ws?.floor) throw new Error('não é um andar');
+  if (!ws?.floor) throw new Error(tr('não é um andar'));
   for (const n of ws.nodes) sessions.stop(n.id);
   if (ws.floor.kind === 'git') {
     await git(ws.floor.root, ['worktree', 'remove', '--force', ws.floor.dir]);
