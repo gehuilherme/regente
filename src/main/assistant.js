@@ -2,18 +2,21 @@
 // Usa um CLI de LLM configurável (padrão: `claude -p` com um modelo pequeno). Opcional e desligado por padrão.
 const { spawn } = require('child_process');
 
-const PROMPT = (name, screen) => `Você observa um agente de código chamado "${name}" que acabou de terminar um turno num terminal.
-Abaixo está o fim da tela dele. Responda APENAS com JSON válido, sem markdown, no formato:
-{"summary": "2-3 frases dizendo o que o agente fez e o estado atual", "followups": ["próximo passo 1", "próximo passo 2", "próximo passo 3"]}
-Os próximos passos são mensagens curtas que o usuário enviaria ao agente; priorize verificação (revisar o diff, rodar/escrever testes, rodar o build, testar manualmente).
-Escreva no mesmo idioma que o agente usou.
+// Idioma explícito: a tela costuma estar em inglês (interface dos CLIs) mesmo quando o usuário não está.
+const LANG_NAMES = { pt: 'Brazilian Portuguese', en: 'English', es: 'Spanish' };
 
---- TELA ---
+const PROMPT = (name, screen, lang) => `You are watching a coding agent named "${name}" that just finished a turn in a terminal.
+Below is the end of its screen. Reply ONLY with valid JSON, no markdown, in this format:
+{"summary": "2-3 sentences on what the agent did and the current state", "followups": ["next step 1", "next step 2", "next step 3"]}
+Next steps are short messages the user would send to the agent; prioritize verification (review the diff, write/run tests, run the build, test manually).
+Write the summary AND every next step in ${LANG_NAMES[lang] || LANG_NAMES.pt}, regardless of the language on the screen.
+
+--- SCREEN ---
 ${screen}`;
 
 class Assistant {
-  constructor({ store, sessions, send, env }) {
-    Object.assign(this, { store, sessions, send, env });
+  constructor({ store, sessions, send, env, lang = () => 'pt' }) {
+    Object.assign(this, { store, sessions, send, env, lang });
     this.timers = new Map();
     this.busy = false;
   }
@@ -38,7 +41,7 @@ class Assistant {
     if (this.busy && !manual) return null;
     this.busy = true;
     try {
-      const out = await this.run(PROMPT(hit.node.title, s.screenText(120)));
+      const out = await this.run(PROMPT(hit.node.title, s.screenText(120), this.lang()));
       const json = JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1));
       const card = { id, workspaceId: hit.ws.id, title: hit.node.title, summary: String(json.summary || ''), followups: (json.followups || []).slice(0, 3).map(String), at: Date.now() };
       this.send('assistant:card', card);

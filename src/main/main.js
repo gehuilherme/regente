@@ -121,7 +121,7 @@ function notify(title, body, onClick) {
 
 const routines = new Routines({ store, sessions, tr, deliver: (node, text) => bus.deliver(node, text), notify: (title, body) => notify(tr(title), body) });
 bus.routines = routines;
-const assistant = new Assistant({ store, sessions, send, env: () => {
+const assistant = new Assistant({ store, sessions, send, lang, env: () => {
   const env = { ...process.env, PATH: `${process.env.PATH}${extraPath()}` };
   delete env.ELECTRON_RUN_AS_NODE;
   return env;
