@@ -1129,8 +1129,11 @@ function settingsModal() {
       el('div', { class: 'row' }, el('span', { class: 'hint', style: { flex: 1 } }, t('Versão {v}', { v: S.state.version })),
         el('button', { class: 'outline', onclick: async () => {
           const s = await api.updateCheck();
+          // `check()` devolve o status atual sem nova consulta se já houver uma checagem ou download em andamento.
           toast({ disabled: t('Atualização automática só funciona no app instalado'), none: t('Você já está na versão mais recente'),
-            error: t('Falha ao procurar atualização: {msg}', { msg: s.message }) }[s.state] || t('Versão {v} disponível', { v: s.version }), s.state === 'error');
+            error: t('Falha ao procurar atualização: {msg}', { msg: s.message }), checking: t('Já procurando atualização…'),
+            downloading: t('Baixando versão {v}…', { v: s.version }), ready: t('Regente {v} baixado', { v: s.version }),
+            available: t('Versão {v} disponível', { v: s.version }) }[s.state] || t('Não foi possível verificar agora'), s.state === 'error');
         } }, t('Verificar agora'))),
       el('h3', { style: { marginTop: '8px' } }, 'Backups'),
       el('div', { class: 'hint' }, t('Um backup automático por hora (os 48 mais recentes ficam guardados).')),
