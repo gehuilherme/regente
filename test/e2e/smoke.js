@@ -1,9 +1,10 @@
 // Teste ponta a ponta: dois shells conectados + nota. Rode com `npm run e2e`.
 const assert = require('assert');
+const os = require('os');
 const path = require('path');
 
 module.exports = async ({ win, store, sessions, shot, wait }) => {
-  const out = process.env.REGENTE_SHOTS || '/tmp';
+  const out = process.env.REGENTE_SHOTS || os.tmpdir();
   const exec = (js) => win.webContents.executeJavaScript(js);
   await wait(1500);
 

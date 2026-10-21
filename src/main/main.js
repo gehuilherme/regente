@@ -10,6 +10,7 @@ const { Bus } = require('./bus');
 const { Routines } = require('./routines');
 const { Assistant } = require('./assistant');
 const { Updater } = require('./updater');
+const platform = require('./platform');
 const i18n = require('../shared/i18n');
 
 i18n.define(require('../shared/locales'));
@@ -29,9 +30,7 @@ const store = new Store(dataDir);
 const sessions = new SessionManager();
 const portals = new Portals();
 const binDir = path.join(dataDir, 'bin');
-// Sockets unix têm limite de ~108 bytes no caminho: fica em XDG_RUNTIME_DIR com um hash do dataDir.
-const socketPath = path.join(process.env.XDG_RUNTIME_DIR || os.tmpdir(),
-  `regente-${require('crypto').createHash('sha1').update(dataDir).digest('hex').slice(0, 10)}.sock`);
+const socketPath = platform.socketPath(dataDir);
 
 const send = (ch, payload) => win && !win.isDestroyed() && win.webContents.send(ch, payload);
 
@@ -41,6 +40,11 @@ function installShim() {
   const cli = path.join(__dirname, '..', '..', 'bin', 'regente.js').replace('app.asar', 'app.asar.unpacked');
   const sh = `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec "${process.execPath}" "${cli}" "$@"\n`;
   fs.writeFileSync(path.join(binDir, 'regente'), sh, { mode: 0o755 });
+  // PowerShell e cmd acham o regente.cmd pelo PATHEXT; o Git Bash usa o script acima.
+  if (platform.isWin) {
+    const cmd = `@echo off\r\nsetlocal\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cli}" %*\r\n`;
+    fs.writeFileSync(path.join(binDir, 'regente.cmd'), cmd);
+  }
 }
 
 const SYSTEM_PROMPT = `# Regente
@@ -63,23 +67,30 @@ function systemPrompt(node, ws) {
 }
 
 // Fallback: se o `claude` não estiver instalado no PATH, usa o binário que vem na extensão do VS Code.
-function extraPath() {
+function extraPathDir() {
   const dir = path.join(os.homedir(), '.vscode', 'extensions');
   try {
     const ext = fs.readdirSync(dir).filter((d) => d.startsWith('anthropic.claude-code-'))
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop();
     const bin = ext && path.join(dir, ext, 'resources', 'native-binary');
-    return bin && fs.existsSync(path.join(bin, 'claude')) ? `:${bin}` : '';
-  } catch { return ''; }
+    return bin && fs.existsSync(path.join(bin, platform.isWin ? 'claude.exe' : 'claude')) ? bin : null;
+  } catch { return null; }
+}
+const extraPath = () => { const d = extraPathDir(); return d ? path.delimiter + d : ''; };
+
+// Ambiente dos processos filhos: sem ELECTRON_RUN_AS_NODE e com o fallback do claude no PATH.
+function childEnv(prepend = []) {
+  const env = platform.withPath(process.env, { prepend, append: [extraPathDir()] });
+  delete env.ELECTRON_RUN_AS_NODE;
+  return env;
 }
 
 function startSession(node, ws, cols, rows) {
   const agent = store.state.agents.find((a) => a.id === node.agent) || store.state.agents.find((a) => a.id === 'shell');
-  const env = { ...process.env };
-  delete env.ELECTRON_RUN_AS_NODE;
+  const env = childEnv([binDir]);
   Object.assign(env, {
     TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Regente',
-    PATH: `${binDir}:${env.PATH || '/usr/bin:/bin'}${extraPath()}`, REGENTE_BIN: binDir, REGENTE_EXTRA_PATH: extraPath(),
+    REGENTE_BIN: binDir, REGENTE_EXTRA_PATH: extraPath(),
     REGENTE_SOCK: socketPath, REGENTE_TOKEN: bus.tokenFor(node.id), REGENTE_NODE: node.id, REGENTE_NAME: node.title, REGENTE_LANG: lang(),
     REGENTE_SYSTEM_PROMPT: systemPrompt(node, ws),
   });
@@ -121,11 +132,7 @@ function notify(title, body, onClick) {
 
 const routines = new Routines({ store, sessions, tr, deliver: (node, text) => bus.deliver(node, text), notify: (title, body) => notify(tr(title), body) });
 bus.routines = routines;
-const assistant = new Assistant({ store, sessions, send, lang, env: () => {
-  const env = { ...process.env, PATH: `${process.env.PATH}${extraPath()}` };
-  delete env.ELECTRON_RUN_AS_NODE;
-  return env;
-} });
+const assistant = new Assistant({ store, sessions, send, lang, env: () => childEnv() });
 const updater = new Updater(send);
 
 // Ensina os agentes a usar a CLI instalando uma skill em ~/.claude/skills e ~/.agents/skills.
@@ -287,12 +294,13 @@ ipcMain.handle('portal:trust', (_e, host) => {
 });
 
 // Descobre quais CLIs de agente estão instalados (no PATH do shell interativo do usuário).
+// No Windows não há `setsid` nem rc de shell que mude o PATH: basta procurar no PATH do ambiente.
 ipcMain.handle('agents:detect', async () => {
-  const env = { ...process.env, PATH: `${process.env.PATH}${extraPath()}` };
-  delete env.ELECTRON_RUN_AS_NODE;
-  const shell = process.env.SHELL || '/bin/bash';
+  const env = childEnv();
+  const shell = platform.shell().path;
   const check = (cmd) => new Promise((resolve) => {
     if (!/^[\w.-]+$/.test(cmd)) return resolve(null);
+    if (platform.isWin) return resolve(platform.which(cmd, env));
     execFile('setsid', ['-w', shell, '-ic', `command -v ${cmd}`], { env, timeout: 6000 }, (err, out) => {
       const line = String(out || '').trim().split('\n').pop();
       resolve(!err && line.startsWith('/') ? line : null);
@@ -301,7 +309,7 @@ ipcMain.handle('agents:detect', async () => {
   const result = {};
   await Promise.all(store.state.agents.map(async (a) => {
     const cmd = (a.launch || '').trim().split(/\s+/)[0];
-    result[a.id] = cmd ? await check(cmd) : process.env.SHELL || '/bin/sh';
+    result[a.id] = cmd ? await check(cmd) : shell;
   }));
   return result;
 });
@@ -342,7 +350,7 @@ function cloneWorkspace(src, name, fromDir, toDir) {
     if (n.type === 'note') store.writeNote(nid, store.readNote(n.id));
     n.id = nid;
     delete n.statusText;
-    if (n.cwd && fromDir && toDir && (n.cwd === fromDir || n.cwd.startsWith(fromDir + '/'))) n.cwd = toDir + n.cwd.slice(fromDir.length);
+    if (n.cwd && fromDir && toDir && platform.isInside(n.cwd, fromDir)) n.cwd = path.join(toDir, path.relative(fromDir, n.cwd));
   }
   ws.edges = ws.edges.filter((e) => map.has(e.from) && map.has(e.to)).map((e) => ({ ...e, id: uid('e-'), from: map.get(e.from), to: map.get(e.to) }));
   if (toDir) ws.cwd = toDir;
@@ -368,8 +376,10 @@ ipcMain.handle('floor:create', async (_e, { workspaceId, name }) => {
     return ws;
   }
   // Sem git: cópia do diretório (reflink quando o sistema de arquivos suporta, ex. btrfs/xfs).
-  const dir = `${src.cwd.replace(/\/$/, '')}-${slug}`;
-  await new Promise((res, rej) => execFile('cp', ['-a', '--reflink=auto', src.cwd, dir], (err) => err ? rej(err) : res()));
+  // O Windows não tem `cp`: copia pelo Node.
+  const dir = `${src.cwd.replace(/[\\/]+$/, '')}-${slug}`;
+  if (platform.isWin) await fs.promises.cp(src.cwd, dir, { recursive: true, preserveTimestamps: true });
+  else await new Promise((res, rej) => execFile('cp', ['-a', '--reflink=auto', src.cwd, dir], (err) => err ? rej(err) : res()));
   const ws = cloneWorkspace(src, `${src.name} / ${name}`, src.cwd, dir);
   ws.parentId = src.id; ws.floor = { kind: 'copy', dir, root: src.cwd };
   store.state.workspaces.push(ws); store.save();

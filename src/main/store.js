@@ -1,5 +1,6 @@
 // Persistência local: um state.json (workspaces, papéis, partituras) e notas em Markdown.
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -27,7 +28,7 @@ const DEFAULT_ROLES = [
 
 function newWorkspace(name, cwd) {
   return {
-    id: uid('w-'), name, cwd: cwd || process.env.HOME,
+    id: uid('w-'), name, cwd: cwd || os.homedir(),
     view: { x: 0, y: 0, zoom: 1 },
     nodes: [], edges: [], drawings: [],
     createdAt: Date.now(),
@@ -48,7 +49,7 @@ class Store {
     let s = null;
     try { s = JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch {}
     if (!s || !Array.isArray(s.workspaces)) {
-      const ws = newWorkspace('Principal', process.env.HOME);
+      const ws = newWorkspace('Principal', os.homedir());
       s = { version: 1, activeWorkspace: ws.id, workspaces: [ws], roles: DEFAULT_ROLES, scores: [], agents: DEFAULT_AGENTS, settings: {} };
     }
     s.roles ||= DEFAULT_ROLES;

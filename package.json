@@ -6,9 +6,9 @@
   "homepage": "https://github.com/gehuilherme/regente",
   "main": "src/main/main.js",
   "scripts": {
-    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "start": "node scripts/electron.js",
     "test": "node --test test/*.test.js",
-    "e2e": "env -u ELECTRON_RUN_AS_NODE REGENTE_DATA=${REGENTE_DATA:-/tmp/regente-e2e} REGENTE_TEST_SCRIPT=test/e2e/smoke.js electron .",
+    "e2e": "node scripts/electron.js --e2e",
     "dist": "electron-builder --publish never"
   },
   "license": "MIT",

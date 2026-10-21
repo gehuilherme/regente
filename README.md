@@ -15,7 +15,16 @@ npm install
 npm start
 ```
 
-Para adicionar o Regente ao menu de aplicativos, rode `./scripts/install-desktop.sh`.
+Para adicionar o Regente ao menu de aplicativos (Linux), rode `./scripts/install-desktop.sh`.
+
+### Windows
+
+Os terminais usam o **Git Bash** quando ele está instalado ([git-scm.com](https://git-scm.com/download/win)), e os comandos
+dos agentes e as mensagens entre eles funcionam como no Linux e no macOS. Sem o Git Bash, os terminais abrem no PowerShell
+(`pwsh` se houver, senão o `powershell.exe`). Para escolher outro shell, defina `REGENTE_SHELL` (ex.: `REGENTE_SHELL=pwsh.exe`).
+
+No PowerShell 5.1, argumentos com aspas chegam quebrados a programas externos. Se um agente não receber o system prompt
+inteiro, instale o Git Bash ou o PowerShell 7.
 
 ## Conceitos
 
@@ -23,7 +32,7 @@ Para adicionar o Regente ao menu de aplicativos, rode `./scripts/install-desktop
 |---|---|
 | **Agente** | Terminal com um CLI de IA. O ponto colorido mostra o estado: ocioso, trabalhando ou precisando de você. |
 | **Conexão** | Arraste o ● da borda de um nó até outro nó. Um agente só enxerga e fala com quem está conectado a ele. |
-| **Nota** | Markdown em `~/.config/regente/notes/*.md`. Agentes conectados leem e escrevem nela. |
+| **Nota** | Markdown em `~/.config/regente/notes/*.md` (no Windows, `%APPDATA%\regente\notes`). Agentes conectados leem e escrevem nela. |
 | **Portal** | Navegador embutido. Agentes conectados navegam, leem a árvore de elementos, clicam e digitam. Com ⌖ você recorta uma área e manda para um agente. |
 | **Papel** | Instrução reutilizável (Revisor, Testador…). Entra no system prompt do agente. |
 | **Andar** | Cópia isolada do workspace: `git worktree` numa branch `regente/<nome>`. Dá para "pousar" o andar (merge) ou descartá-lo. |
@@ -75,6 +84,6 @@ npm run e2e     # teste ponta a ponta no Electron (janela oculta)
 
 Estrutura:
 
-- `src/main/`: processo principal. Inclui `sessions.js` (PTY e tela headless), `bus.js` (orquestração via socket unix), `portal.js`, `routines.js`, `assistant.js` e `store.js`.
+- `src/main/`: processo principal. Inclui `sessions.js` (PTY e tela headless), `bus.js` (orquestração via socket unix ou named pipe no Windows), `platform.js` (shell, PATH e socket de cada sistema), `portal.js`, `routines.js`, `assistant.js` e `store.js`.
 - `src/renderer/`: interface. Inclui `app.js` (canvas e workspaces) e `nodes.js` (terminal, nota e portal).
 - `bin/regente.js`: CLI e servidor MCP.
