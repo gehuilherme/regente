@@ -3,6 +3,7 @@ const os = require('os');
 const pty = require('node-pty');
 const { Terminal } = require('@xterm/headless');
 const { EventEmitter } = require('events');
+const platform = require('./platform');
 
 const RING_LIMIT = 2 * 1024 * 1024; // bytes de saída bruta guardados para reanexar a UI
 const BUSY_WINDOW = 1500; // ms sem saída => ocioso
@@ -29,13 +30,11 @@ class Session extends EventEmitter {
     this.exitCode = null;
     this.title = '';
 
-    const shell = process.env.SHELL || '/bin/bash';
     // O agente roda dentro de um shell interativo; ao sair, o terminal continua utilizável.
-    // Shell não-login (como os emuladores de terminal comuns): /etc/profile não reseta o PATH.
-    const pathFix = 'export PATH="$REGENTE_BIN:$PATH${REGENTE_EXTRA_PATH}"';
-    const args = launch ? ['-i', '-c', `${pathFix}; ${launch}; exec ${shell} -i`] : ['-i'];
+    const shell = platform.shell();
+    this.shellKind = shell.kind;
     this.headless = new Terminal({ cols, rows, scrollback: 5000, allowProposedApi: true });
-    this.pty = pty.spawn(shell, args, { name: 'xterm-256color', cols, rows, cwd: cwd || os.homedir(), env });
+    this.pty = pty.spawn(shell.path, platform.sessionArgs(shell, launch), { name: 'xterm-256color', cols, rows, cwd: cwd || os.homedir(), env });
     this.pid = this.pty.pid;
 
     this.pty.onData((data) => {

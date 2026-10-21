@@ -1,4 +1,4 @@
-# Testes a cada push e pull request: unitários (Linux e macOS) e ponta a ponta (Linux).
+# Testes a cada push e pull request: unitários (Linux, macOS e Windows) e ponta a ponta (Linux e Windows).
 name: Test
 
 on:
@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,4 +60,31 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-screenshots
+          path: ${{ runner.temp }}/shots/*.png
+
+  # No Windows não há display virtual nem sandbox a liberar; o runner já traz o Git Bash, que vira o shell dos terminais.
+  e2e-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: E2E
+        shell: bash
+        run: |
+          mkdir -p "$REGENTE_SHOTS"
+          npm run e2e
+        env:
+          REGENTE_DATA: ${{ runner.temp }}/regente-e2e
+          REGENTE_SHOTS: ${{ runner.temp }}/shots
+
+      - name: Guardar screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-windows
           path: ${{ runner.temp }}/shots/*.png

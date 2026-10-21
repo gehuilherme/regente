@@ -1,10 +1,11 @@
-// Barramento de orquestração: socket unix local onde a CLI `regente` (rodando dentro de cada
+// Barramento de orquestração: socket local (unix ou named pipe no Windows) onde a CLI `regente` (rodando dentro de cada
 // terminal) fala com o app. Cada PTY recebe um token próprio; um agente só enxerga os nós
 // conectados a ele por uma linha no canvas.
 const net = require('net');
 const fs = require('fs');
 const crypto = require('crypto');
 const { uid } = require('./store');
+const platform = require('./platform');
 const i18n = require('../shared/i18n');
 
 const MAX_QUEUE_WAIT = 30 * 60 * 1000;
@@ -55,8 +56,9 @@ class Bus {
     return t;
   }
 
+  // No Windows o socketPath é um named pipe: não existe arquivo para apagar nem permissão para ajustar.
   listen() {
-    try { fs.unlinkSync(this.socketPath); } catch {}
+    if (!platform.isWin) try { fs.unlinkSync(this.socketPath); } catch {}
     this.server = net.createServer((sock) => {
       let buf = '';
       sock.on('data', (chunk) => {
@@ -74,10 +76,10 @@ class Bus {
       });
       sock.on('error', () => {});
     });
-    this.server.listen(this.socketPath, () => fs.chmodSync(this.socketPath, 0o600));
+    this.server.listen(this.socketPath, () => platform.isWin || fs.chmodSync(this.socketPath, 0o600));
   }
 
-  close() { this.server?.close(); try { fs.unlinkSync(this.socketPath); } catch {} }
+  close() { this.server?.close(); if (!platform.isWin) try { fs.unlinkSync(this.socketPath); } catch {} }
 
   async handle(line) {
     const req = JSON.parse(line);
@@ -130,8 +132,8 @@ class Bus {
 
   deliver(node, text, now) {
     const s = this.liveSession(node);
-    // Num shell puro a mensagem seria executada como comando: exibe com heredoc.
-    if (node.agent === 'shell') text = `cat <<'REGENTE_MSG'\n${text}\nREGENTE_MSG`;
+    // Num shell puro a mensagem seria executada como comando: só exibe (heredoc / here-string).
+    if (node.agent === 'shell') text = platform.showText(s.shellKind, text);
     if (now || s.status === 'idle' || s.status === 'starting') {
       s.submit(text);
       return this.tr('entregue');

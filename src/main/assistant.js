@@ -52,7 +52,11 @@ class Assistant {
   run(prompt) {
     const cmd = this.cfg.command || 'claude -p --model haiku';
     return new Promise((resolve, reject) => {
-      const p = spawn(process.env.SHELL || '/bin/sh', ['-c', cmd], { env: this.env ? this.env() : process.env });
+      const env = this.env ? this.env() : process.env;
+      // No Windows o cmd.exe (shell: true) repassa o stdin ao comando sem depender do Git Bash.
+      const p = process.platform === 'win32'
+        ? spawn(cmd, { env, shell: true, windowsHide: true })
+        : spawn(process.env.SHELL || '/bin/sh', ['-c', cmd], { env });
       let out = '', err = '';
       const t = setTimeout(() => { p.kill(); reject(new Error('assistente: tempo esgotado')); }, 90000);
       p.stdout.on('data', (d) => { out += d; });

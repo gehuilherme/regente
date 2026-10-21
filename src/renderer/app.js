@@ -396,7 +396,7 @@ function refreshMeta(id) {
     const agent = S.state.agents.find((a) => a.id === n.agent);
     bits.push(agent?.label || n.agent);
     const termTitle = S.titles[id];
-    bits.push(termTitle || (n.cwd || S.ws.cwd || '').split('/').pop());
+    bits.push(termTitle || (n.cwd || S.ws.cwd || '').split(/[\\/]/).pop());
   } else if (n.type === 'portal') bits.push(f.view.title || n.url || '');
   else bits.push(t('nota'));
   f.meta.replaceChildren(bits.filter(Boolean).join(' · '));
@@ -903,7 +903,7 @@ async function saveScore(close) {
     const c = structuredClone(n);
     delete c.statusText;
     // cwd relativo ao workspace para a partitura funcionar em outro projeto.
-    if (c.cwd && base && (c.cwd === base || c.cwd.startsWith(base + '/'))) c.cwd = '.' + c.cwd.slice(base.length);
+    if (c.cwd && base && (c.cwd === base || (c.cwd.startsWith(base) && /^[\\/]/.test(c.cwd.slice(base.length))))) c.cwd = '.' + c.cwd.slice(base.length);
     return c;
   });
   S.state.scores.push({ id: uid('s-'), name, nodes, edges: structuredClone(S.ws.edges), drawings: structuredClone(S.ws.drawings), notes, at: Date.now() });
