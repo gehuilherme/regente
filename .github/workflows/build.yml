@@ -1,0 +1,82 @@
+# Gera os instaladores do Regente para macOS e Linux (.deb/.rpm).
+# Windows está pausado: a config "win" do package.json continua lá para quando voltar.
+# Roda manualmente (Actions → Build → Run workflow) ou ao enviar uma tag v*,
+# que também publica os arquivos numa GitHub Release.
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-latest
+            args: --linux deb rpm --x64
+          # Runner ARM nativo: node-pty compila sem cross-compilação.
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            args: --linux deb rpm --arm64
+          - name: mac-arm64
+            os: macos-latest
+            args: --mac --arm64
+          - name: mac-x64
+            os: macos-15-intel
+            args: --mac --x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # O fpm do electron-builder precisa do rpmbuild para gerar o .rpm.
+      - name: Instalar rpm
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - run: npm ci
+
+      - run: npm test
+
+      # node-pty é recompilado para o Electron de cada plataforma pelo electron-builder.
+      - name: Build
+        run: npx electron-builder ${{ matrix.args }} --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regente-${{ matrix.name }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

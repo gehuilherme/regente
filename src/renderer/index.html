@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: https: http:; font-src 'self' data:">
+  <title>Regente</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../../node_modules/marked/lib/marked.umd.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="side-top">
+      <button id="btn-new-ws" class="pill-btn" title="Novo workspace"><i class="ic" data-ic="plus"></i></button>
+      <span class="spacer"></span>
+      <button id="btn-hide-side" class="ghost" title="Esconder barra lateral (Ctrl+B)"><i class="ic" data-ic="panel-left"></i></button>
+    </div>
+    <label class="filter"><i class="ic" data-ic="search"></i><input id="ws-filter" type="text" placeholder="Filtrar"></label>
+    <nav id="ws-list"></nav>
+    <div class="side-bottom">
+      <button id="btn-new-group" class="ghost"><i class="ic" data-ic="folder"></i> Grupo</button>
+      <span class="spacer"></span>
+      <button id="btn-theme" class="ghost" title="Tema claro/escuro"><i class="ic" data-ic="moon"></i></button>
+      <button id="btn-settings" class="ghost" title="Configurações"><i class="ic" data-ic="settings"></i></button>
+    </div>
+  </aside>
+
+  <main id="viewport">
+    <div id="pan">
+      <div id="world">
+        <svg id="drawings" class="layer"></svg>
+        <svg id="edges" class="layer"></svg>
+        <div id="nodes"></div>
+      </div>
+    </div>
+    <svg id="draw-overlay" hidden></svg>
+
+    <button id="btn-show-side" class="float-btn" title="Mostrar barra lateral (Ctrl+B)" hidden><i class="ic" data-ic="panel-left"></i></button>
+
+    <div id="toolbar" class="floating">
+      <button data-tool="select" title="Selecionar (V)"><i class="ic" data-ic="mouse-pointer-2"></i></button>
+      <button id="btn-add-term" title="Novo agente (Ctrl+Shift+T)"><i class="ic" data-ic="square-terminal"></i></button>
+      <button id="btn-add-note" title="Nova nota (Ctrl+Shift+N)"><i class="ic" data-ic="sticky-note"></i></button>
+      <button id="btn-add-portal" title="Novo portal (Ctrl+Shift+P)"><i class="ic" data-ic="globe"></i></button>
+      <span class="sep"></span>
+      <button data-tool="text" title="Texto (T)"><i class="ic" data-ic="type"></i></button>
+      <button data-tool="pen" title="Caneta (P)"><i class="ic" data-ic="pen-line"></i></button>
+      <button data-tool="arrow" title="Seta (A)"><i class="ic" data-ic="move-up-right"></i></button>
+      <button data-tool="rect" title="Retângulo (R)"><i class="ic" data-ic="square"></i></button>
+      <button data-tool="erase" title="Borracha (E)"><i class="ic" data-ic="eraser"></i></button>
+    </div>
+
+    <div id="drawbar" class="floating" hidden>
+      <div id="swatches"></div>
+      <span class="sep"></span>
+      <button id="stroke-minus" title="Mais fino"><i class="ic" data-ic="minus"></i></button>
+      <span id="stroke-size">3</span>
+      <button id="stroke-plus" title="Mais grosso"><i class="ic" data-ic="plus"></i></button>
+    </div>
+
+    <div id="topright" class="floating">
+      <button id="btn-palette" title="Batuta: buscar em tudo (Ctrl+P)"><i class="ic" data-ic="command"></i></button>
+      <button id="btn-floor" title="Andares (Ctrl+Shift+F)"><i class="ic" data-ic="layers-2"></i></button>
+      <button id="btn-scores" title="Partituras"><i class="ic" data-ic="music-4"></i></button>
+      <button id="btn-roles" title="Papéis"><i class="ic" data-ic="users"></i></button>
+      <button id="btn-routines" title="Rotinas"><i class="ic" data-ic="clock"></i></button>
+      <button id="btn-log" title="Mensagens entre agentes (Ctrl+L)"><i class="ic" data-ic="message-square-more"></i></button>
+    </div>
+
+    <div id="floorbar" class="floating" hidden></div>
+
+    <div id="zoombar" class="floating">
+      <button id="btn-fit" title="Ver tudo (Ctrl+0)"><i class="ic" data-ic="scan"></i></button>
+      <span class="sep"></span>
+      <button id="btn-zoom-out" title="Diminuir (Ctrl+-)"><i class="ic" data-ic="minus"></i></button>
+      <span id="zoom-indicator">100%</span>
+      <button id="btn-zoom-in" title="Aumentar (Ctrl+=)"><i class="ic" data-ic="plus"></i></button>
+    </div>
+
+    <div id="cards"></div>
+
+    <div id="empty-hint" hidden>
+      <h2>Comece seu arranjo</h2>
+      <p>Clique em <i class="ic" data-ic="square-terminal"></i> para criar um agente: Claude Code, Codex, Gemini, OpenCode ou shell.</p>
+      <p>Arraste do <b>●</b> na borda de um nó até outro para conectá-los. Agentes conectados conversam via <code>regente</code>.</p>
+      <p class="keys">Ctrl+roda zoom · arrastar o fundo move · duplo clique cria · Ctrl+P busca · Alt+setas navega</p>
+    </div>
+  </main>
+
+  <aside id="log" hidden>
+    <header><b>Mensagens entre agentes</b><button class="ghost" id="log-close"><i class="ic" data-ic="x"></i></button></header>
+    <div id="log-list"></div>
+  </aside>
+  <div id="modal-root"></div>
+</body>
+</html>

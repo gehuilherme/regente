@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#252833"/>
+      <stop offset="1" stop-color="#0e0f13"/>
+    </linearGradient>
+    <linearGradient id="trail" gradientUnits="userSpaceOnUse" x1="236" y1="600" x2="560" y2="250">
+      <stop offset="0" stop-color="#2f6df6" stop-opacity="0"/>
+      <stop offset="1" stop-color="#2f6df6"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <rect x="65.5" y="65.5" width="893" height="893" rx="198.5" fill="none" stroke="#fff" stroke-opacity=".08" stroke-width="3"/>
+  <!-- rastro da batuta ligando os agentes -->
+  <path d="M236 600 C 290 320, 600 190, 790 336" fill="none" stroke="url(#trail)" stroke-width="24" stroke-linecap="round"/>
+  <!-- agentes: ocioso, trabalhando, precisando de você -->
+  <circle cx="318" cy="392" r="60" fill="#26b36b"/>
+  <circle cx="556" cy="258" r="60" fill="#2f6df6"/>
+  <circle cx="790" cy="336" r="60" fill="#f0a020"/>
+  <!-- batuta -->
+  <path d="M726 432 L 406 776 L 382 754 Z" fill="#fff" stroke="#fff" stroke-width="12" stroke-linejoin="round"/>
+  <line x1="398" y1="762" x2="294" y2="874" stroke="#fff" stroke-width="58" stroke-linecap="round"/>
+</svg>

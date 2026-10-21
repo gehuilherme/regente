@@ -1,0 +1,76 @@
+{
+  "name": "regente",
+  "version": "0.1.0",
+  "description": "Canvas espacial para orquestrar agentes de IA (Claude Code, Codex, Gemini, OpenCode, shell)",
+  "author": "Guilherme <guilhermehenrique1099@gmail.com>",
+  "homepage": "https://github.com/gehuilherme/regente",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron .",
+    "test": "node --test test/*.test.js",
+    "e2e": "env -u ELECTRON_RUN_AS_NODE REGENTE_DATA=${REGENTE_DATA:-/tmp/regente-e2e} REGENTE_TEST_SCRIPT=test/e2e/smoke.js electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/headless": "^6.0.0",
+    "@xterm/xterm": "^6.0.0",
+    "lucide-static": "^0.460.0",
+    "marked": "^18.1.1",
+    "node-pty": "^1.1.0"
+  },
+  "bin": {
+    "regente": "bin/regente.js"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "io.github.gehuilherme.regente",
+    "productName": "Regente",
+    "files": [
+      "src/**",
+      "bin/**",
+      "skills/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "bin/**",
+      "skills/**",
+      "node_modules/node-pty/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "identity": "-"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "rpm"
+      ],
+      "category": "Development",
+      "maintainer": "Guilherme <guilhermehenrique1099@gmail.com>"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
