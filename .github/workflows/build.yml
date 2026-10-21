@@ -50,6 +50,11 @@ jobs:
 
       - run: npm test
 
+      # A versão do app vem da tag (v1.2.3 → 1.2.3): é ela que vai nos latest*.yml que o auto-update compara.
+      - name: Versão da tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
       # node-pty é recompilado para o Electron de cada plataforma pelo electron-builder.
       - name: Build
         run: npx electron-builder ${{ matrix.args }} --publish never
@@ -62,8 +67,13 @@ jobs:
             dist/*.rpm
             dist/*.dmg
             dist/*.zip
+            dist/*.blockmap
+            dist/latest*.yml
           if-no-files-found: error
 
+  # Os latest*.yml são o que o electron-updater consulta: latest-linux.yml (x64), latest-linux-arm64.yml
+  # e latest-mac.yml. Os dois jobs de mac geram o mesmo nome e um sobrescreve o outro, o que não tem
+  # problema porque no macOS o app só lê a versão para avisar (sem assinatura não instala sozinho).
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build

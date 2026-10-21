@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('regente', {
   assistantAsk: (id) => ipcRenderer.invoke('assistant:ask', { id }),
   skillInstall: () => ipcRenderer.invoke('skill:install'),
   captureRegion: (wcId, rect) => ipcRenderer.invoke('portal:capture', { wcId, rect }),
+  updateStatus: () => ipcRenderer.invoke('update:status'),
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
 
   onTermData: on('term:data'),
   onAssistantCard: on('assistant:card'),
@@ -56,4 +59,5 @@ contextBridge.exposeInMainWorld('regente', {
   onBusEvent: on('bus:event'),
   onWorkspaceReplace: on('ws:replace'),
   onFocusNode: on('focus:node'),
+  onUpdateStatus: on('update:status'),
 });

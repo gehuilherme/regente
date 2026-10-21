@@ -9,6 +9,7 @@ const { Portals } = require('./portal');
 const { Bus } = require('./bus');
 const { Routines } = require('./routines');
 const { Assistant } = require('./assistant');
+const { Updater } = require('./updater');
 
 app.setName('Regente');
 const dataDir = process.env.REGENTE_DATA || path.join(app.getPath('appData'), 'regente');
@@ -113,6 +114,7 @@ const assistant = new Assistant({ store, sessions, send, env: () => {
   delete env.ELECTRON_RUN_AS_NODE;
   return env;
 } });
+const updater = new Updater(send);
 
 // Ensina os agentes a usar a CLI instalando uma skill em ~/.claude/skills e ~/.agents/skills.
 function installSkill() {
@@ -179,10 +181,13 @@ ipcMain.handle('routine:update', (_e, { id, patch }) => routines.update(id, patc
 
 ipcMain.handle('assistant:ask', (_e, { id }) => assistant.summarize(id, true));
 ipcMain.handle('skill:install', () => installSkill());
+ipcMain.handle('update:status', () => updater.status);
+ipcMain.handle('update:check', () => updater.check());
+ipcMain.handle('update:install', () => updater.install());
 
 // ---------- IPC ----------
 
-ipcMain.handle('state:get', () => ({ ...store.state, dataDir }));
+ipcMain.handle('state:get', () => ({ ...store.state, dataDir, version: app.getVersion() }));
 
 ipcMain.handle('ws:save', (_e, ws) => {
   const i = store.state.workspaces.findIndex((w) => w.id === ws.id);
@@ -432,6 +437,7 @@ app.whenReady().then(() => {
   installShim();
   bus.listen();
   createWindow();
+  updater.start(() => store.state.settings.autoUpdate !== false);
 });
 
 app.on('window-all-closed', () => app.quit());

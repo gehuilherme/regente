@@ -368,6 +368,8 @@ body.side-hidden #cards { left: 14px; }
   padding: 9px 16px; border-radius: 10px; z-index: 200; max-width: 70vw; white-space: pre-wrap; box-shadow: var(--shadow-float);
 }
 .toast.error { background: var(--warn); color: #fff; }
+.toast.update { display: flex; align-items: center; gap: 10px; }
+.toast.update button:not(.primary) { background: transparent; color: inherit; border-color: transparent; }
 
 /* ---------- assistente de configuração e modelos ---------- */
 .modal.wide { width: min(860px, 94vw); }

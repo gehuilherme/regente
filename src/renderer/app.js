@@ -1102,6 +1102,14 @@ function settingsModal() {
       el('h3', { style: { marginTop: '8px' } }, 'Integração com agentes'),
       el('div', { class: 'row' },
         el('button', { class: 'outline', onclick: async () => { const d = await api.skillInstall(); toast('Skill instalada em:\n' + d.join('\n')); } }, ic('sparkles'), 'Instalar skill "regente" (~/.claude/skills e ~/.agents/skills)')),
+      el('h3', { style: { marginTop: '8px' } }, 'Atualizações'),
+      el('div', { class: 'row' }, el('label', {}, el('input', { type: 'checkbox', checked: st.autoUpdate !== false, onchange: (e) => { st.autoUpdate = e.target.checked; } }), ' Procurar novas versões automaticamente')),
+      el('div', { class: 'row' }, el('span', { class: 'hint', style: { flex: 1 } }, `Versão ${S.state.version}`),
+        el('button', { class: 'outline', onclick: async () => {
+          const s = await api.updateCheck();
+          toast({ disabled: 'Atualização automática só funciona no app instalado', none: 'Você já está na versão mais recente',
+            error: `Falha ao procurar atualização: ${s.message}` }[s.state] || `Versão ${s.version} disponível`, s.state === 'error');
+        } }, 'Verificar agora')),
       el('h3', { style: { marginTop: '8px' } }, 'Backups'),
       el('div', { class: 'hint' }, 'Um backup automático por hora (os 48 mais recentes ficam guardados).'),
       el('div', { class: 'row' },
@@ -1152,6 +1160,17 @@ function findNode(id) {
   return null;
 }
 
+// Aviso fixo quando há versão nova: pronta para instalar (Linux/Windows) ou só disponível (macOS).
+function updateBanner(s) {
+  if (s.state !== 'ready' && s.state !== 'available') return;
+  document.querySelector('.toast.update')?.remove();
+  const ready = s.state === 'ready';
+  document.body.append(el('div', { class: 'toast update' },
+    `Regente ${s.version} ${ready ? 'baixado' : 'disponível'}`,
+    el('button', { class: 'primary', onclick: () => api.updateInstall() }, ready ? 'Reiniciar e atualizar' : 'Baixar'),
+    el('button', { onclick: (e) => e.currentTarget.parentElement.remove() }, 'Depois')));
+}
+
 function wireEvents() {
   api.onTermData(({ id, data }) => S.frames.get(id)?.view.write(data));
   api.onTermStatus(({ id, status }) => setStatus(id, status));
@@ -1159,6 +1178,8 @@ function wireEvents() {
   api.onTermExit(({ id, code }) => S.frames.get(id)?.view.showExit?.(code));
   api.onWorkspaceReplace((ws) => mergeWorkspace(ws));
   api.onAssistantCard((c) => showCard(c));
+  api.onUpdateStatus(updateBanner);
+  api.updateStatus().then(updateBanner);
   api.onFocusNode(({ id, workspaceId }) => {
     if (S.ws.id !== workspaceId) showWorkspace(workspaceId);
     const n = S.ws.nodes.find((x) => x.id === id);
